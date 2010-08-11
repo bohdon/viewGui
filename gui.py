@@ -1,13 +1,13 @@
 
 
 
-import logging
+import boViewGui
+from boViewGui import view
+
 from pymel.core import *
-from view import View
 
 
-LOG = logging.getLogger('ViewGui : Gui')
-LOG.setLevel(logging.DEBUG)
+LOG = boViewGui.get_log('Gui')
 
 
 class Gui(object):
@@ -71,27 +71,27 @@ class Gui(object):
     
     def resetViews(self):
         """Delete all view instances"""
-        for view in self._views.keys():
-            self._views[view]['inst'] = None
+        for viewName in self._views.keys():
+            self._views[viewName]['inst'] = None
         self._curView = None
     
     def updateViews(self, views):
         LOG.debug('updating views...')
         #delete views that may have been removed
-        for view in self._views.keys():
-            if not views.has_key(view):
-                del self._views[view]
-                LOG.debug('  deleted view : %s' % view)
+        for viewName in self._views.keys():
+            if not views.has_key(viewName):
+                del self._views[viewName]
+                LOG.debug('  deleted view : %s' % viewName)
         
         #add views that do not exist yet
-        for view in views.keys():
-            if not self._views.has_key(view):
-                cls = views[view]
-                if issubclass(cls, View):
-                    self._views[view] = {'cls':cls, 'inst':None}
-                    LOG.debug('  added view : %s' % view)
+        for viewName in views.keys():
+            if not self._views.has_key(viewName):
+                cls = views[viewName]
+                if issubclass(cls, view.View):
+                    self._views[viewName] = {'cls':cls, 'inst':None}
+                    LOG.debug('  added view : %s' % viewName)
                 else:
-                    LOG.debug('  %s is not a subclass of View (%s, %s)' % (view, id(cls.__bases__[0]), id(View)))
+                    LOG.debug('  %s is not a subclass of View (%s, %s)' % (viewName, id(cls.__bases__[0]), id(view.View)))
         
         if self.defaultView is None and self._views != {}:
             self.defaultView = self._views.keys()[0]
@@ -102,38 +102,38 @@ class Gui(object):
         LOG.debug(' curView is %s' % self._curView)
     
     
-    def showView(self, view):
-        if self._views.has_key(view):
-            if view != self._curView:
+    def showView(self, viewName):
+        if self._views.has_key(viewName):
+            if viewName != self._curView:
                 self.hideCurView()
                 #init the view if it hasnt been already
-                self.initView(view)
-                self._views[view]['inst'].show()
-                self._curView = view
-        elif view is None:
+                self.initView(viewName)
+                self._views[viewName]['inst'].show()
+                self._curView = viewName
+        elif viewName is None:
             if self._curView != None:
                 if self._views.has_key(self._curView):
                     self._views[self._curView]['inst'].hide()
-                self._curView = view
+                self._curView = viewName
         LOG.debug('curView is %s' % self._curView)
     
-    def hideView(self, view):
+    def hideView(self, viewName):
         """
         Hide the specified view if it is intended to be
         persistent, otherwise delete the instance
         """
-        if self._views[view]['inst'].persistent:
-            self._views[view]['inst'].hide()
+        if self._views[viewName]['inst'].persistent:
+            self._views[viewName]['inst'].hide()
         else:
-            self._views[view]['inst'] = None
+            self._views[viewName]['inst'] = None
         
     
-    def initView(self, view):
+    def initView(self, viewName):
         """Init a view if it hasn't been already."""
-        if self._views[view]['inst'] is None:
-            cls = self._views[view]['cls']
-            self._views[view]['inst'] = cls(self._mainForm, self.showView)
-            self._views[view]['inst'].create()
+        if self._views[viewName]['inst'] is None:
+            cls = self._views[viewName]['cls']
+            self._views[viewName]['inst'] = cls(self._mainForm, self.showView)
+            self._views[viewName]['inst'].create()
     
     
     def hideCurView(self):

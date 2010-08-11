@@ -1,13 +1,13 @@
 
 
 
-import logging
+import boViewGui
+
 from pymel.core import *
 
 
 
-LOG = logging.getLogger('ViewGui : View')
-LOG.setLevel(logging.DEBUG)
+LOG = boViewGui.get_log('View')
 
 
 class View(object):
@@ -97,9 +97,9 @@ class View(object):
             btns = []
             path = self.links()
             for i in range(0, len(path)):
-                name, view = path[i]
-                btns.append( button(l=name, c=Callback(self.showView, view), h=18) )
-                if view == self.viewName:
+                name, viewName = path[i]
+                btns.append( button(l=name, c=Callback(self.showView, viewName), h=18) )
+                if viewName == self.viewName:
                     button(btns[i], e=True, bgc=[.86, .86, .86])
                 if i == 0:
                     formLayout(self._headFrame, e=True, af=[(btns[i], 'left', 0)])
@@ -140,10 +140,10 @@ class View(object):
         else:
             LOG.error('%s has not been created yet' % self._layout)
     
-    def viewItem(self, view, l=None, ann='', bgc=[.25, .25, .25], en=True):
+    def viewItem(self, viewName, l=None, ann='', bgc=[.25, .25, .25], en=True):
         """Create a button used to link to another view"""
-        if l is None: l = view
-        btn = button(l=l, c=Callback(self.showView, view), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
+        if l is None: l = viewName
+        btn = button(l=l, c=Callback(self.showView, viewName), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
         return btn
     
     def frameItem(self, l, c, ann='', bgc=None, en=True, mw=4, mh=4, bs='etchedIn'):
