@@ -15,22 +15,31 @@
     through direct access to the Gui, but is also available
     to all boViewGui.View subclasses.
     
-    >>> import boViewGui
+    >>> import boViewGui.gui, boViewGui.view
     >>> 
-    >>> class MyView(boViewGui.View):
+    >>> class MyView(boViewGui.view.View):
     >>>     def bodyContent(self):
     >>>         self.viewItem(view='MyView')
     >>>         self.viewItem(view='MyView2')
     >>>         self.viewItem(view='MyView3')
     >>> 
-    >>> gui = boViewGui.Gui()
+    >>> gui = boViewGui.gui.Gui()
     >>> gui.views = {'MyView':MyView, 'MyView2':MyView, 'MyView3':MyView}
     >>> gui.create()
 """
 
-__version__ = '0.4.1'
+import logging
+
+__LOG_LEVEL__ = logging.DEBUG
+
+def get_log(name=__name__):
+    log = logging.getLogger(name)
+    log.setLevel(__LOG_LEVEL__)
+    return log
+
+__VERSION__ = (0, 4, 1)
+
+__version__ = '.'.join([str(n) for n in __VERSION__])
 __author__ = 'Bohdon Sayre'
 
 
-from gui import Gui
-from view import View
