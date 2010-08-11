@@ -15,40 +15,22 @@
     through direct access to the Gui, but is also available
     to all boViewGui.View subclasses.
     
+    >>> import boViewGui
+    >>> 
+    >>> class MyView(boViewGui.View):
+    >>>     def bodyContent(self):
+    >>>         self.viewItem(view='MyView')
+    >>>         self.viewItem(view='MyView2')
+    >>>         self.viewItem(view='MyView3')
+    >>> 
+    >>> gui = boViewGui.Gui()
+    >>> gui.views = {'MyView':MyView, 'MyView2':MyView, 'MyView3':MyView}
+    >>> gui.create()
 """
 
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 __author__ = 'Bohdon Sayre'
 
 
 from gui import Gui
 from view import View
-
-"""
-import boViewGui
-reload(boViewGui)
-reload(boViewGui.gui)
-reload(boViewGui.view)
-
-class MyView(boViewGui.View):
-    _displayName = 'My View'
-    def bodyContent(self):
-        with columnLayout(adj=True):
-            button(l='Hi')
-            button(l='Hello')
-
-g = boViewGui.Gui()
-g.views = {'MyView':MyView}
-g.showView('MyView')
-g.create()
-g.mainView
-g.views = {}
-del g
-
-
-setParent()
-for item in lsUI(cl=True):
-    if 'MyViewHeadFrame' in item.name():
-        print item
-"""
-

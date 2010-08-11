@@ -5,27 +5,28 @@ import logging
 from pymel.core import *
 
 
+
 LOG = logging.getLogger('ViewGui : View')
 LOG.setLevel(logging.DEBUG)
 
+
 class View(object):
     """
-    Template class for a View of the GUI.
+    Template class for a ViewGui View.
     
     Views mainly consist of a frameLayout containing any controls
     and their corresponding methods.
     
-    showView wraps the gui's showView so that views can change views.
-    other methods are provided for creating common controls/layouts.
+    Common control layouts can be created using special methods:
+        viewItem -> create a button that can link to another view
+        frameItem -> create a framed button with text
     """
     
-    #nice name of the view
-    _displayName = 'View'
-    
     #whether or not the view remains existant if it is not visible
-    _persistent = True
+    persistent = True
     
     _visible = False
+    
     _layout = None
     _headFrame = None
     _bodyFrame = None
@@ -37,9 +38,9 @@ class View(object):
     _viewItemHeight = 34
     _frameItemWidth = 90
     
-    def __init__(self, parent, gui):
+    def __init__(self, parent, showView):
         self._parent = parent
-        self.showView = gui.showView
+        self.showView = showView
         self.viewName = self.__class__.__name__
     
     def __del__(self):
@@ -47,26 +48,19 @@ class View(object):
         LOG.info('%s has died...' % self.viewName)
     
     def destroy(self):
-        """
-        Delete the main layout and reset attributes
-        """
+        """Delete the main layout and reset attributes"""
         try: self._layout.delete()
         except: pass
-        self._layout = None
-        self._headFrame = None
-        self._bodyFrame = None
     
     def recreate(self):
         self.destroy()
         self.create()
     
     def create(self):
-        """
-        Create layout here
-        """
+        """Create the layout."""
         LOG.debug('Creating View : %s' % self.viewName)
         with self._parent:
-            with formLayout(nd=100) as self._layout:
+            with formLayout() as self._layout:
                 self._layout.setVisible(self._visible)
                 self.allContent()
         
@@ -80,7 +74,7 @@ class View(object):
         Create two frame layouts as a header and body.
         This is the default style for a ViewGui view.
         If an alternate style is desired, this method
-        should be overrided.
+        should be overriden.
         """
         with frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bs='out') as self._headFrame:
             self.headContent()
@@ -99,7 +93,7 @@ class View(object):
         
         If a custom header is desired, this can method should be overrided.
         """
-        with formLayout('%sLinkForm' % self.viewName, bgc=self._linkBgc, nd=100):
+        with formLayout('%sLinkForm' % self.viewName, bgc=self._linkBgc):
             btns = []
             path = self.links()
             for i in range(0, len(path)):
@@ -122,12 +116,11 @@ class View(object):
         Return a tuple list of the view names and classes.
         This is usually the view's hierarchy, with the current
         view being listed last, and the highest view first.
-        This method should always be overrided.
+        This method should always be overriden.
         
         ex. [('Main', 'Main'), ('Second Page', 'SecondPage'), ('Third Page', self.viewName)]
         """
         return []
-    
     
     def hide(self):
         """Hide the view"""
@@ -147,15 +140,16 @@ class View(object):
         else:
             LOG.error('%s has not been created yet' % self._layout)
     
-    def viewItem(self, l, view, ann='', bgc=[.25, .25, .25], en=True):
+    def viewItem(self, view, l=None, ann='', bgc=[.25, .25, .25], en=True):
         """Create a button used to link to another view"""
+        if l is None: l = view
         btn = button(l=l, c=Callback(self.showView, view), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
         return btn
     
     def frameItem(self, l, c, ann='', bgc=None, en=True, mw=4, mh=4, bs='etchedIn'):
         """Create a small frame with no label and a button with a description"""
         with frameLayout(lv=False, mw=mw, mh=mh, bs=bs) as frame:
-            with formLayout(nd=100, en=en) as form:
+            with formLayout(en=en) as form:
                 btn = button(l=l, c=c, ann=ann, w=self._frameItemWidth)
                 if bgc != None:
                     button(btn, e=True, bgc=bgc)
