@@ -8,12 +8,12 @@
     The View GUI provides a way to easily create
     a window in maya based on using pages or 'views.'
     
-    All views should be subclasses of boViewGui.View.
+    All views should be subclasses of boViewGui.view.View.
     All views should be passed to the Gui as a dictionary
     of {<class name>:<class>}. Views can then be displayed
     by using the showView method. This method can be accessed
     through direct access to the Gui, but is also available
-    to all boViewGui.View subclasses.
+    to all boViewGui.view.View subclasses.
     
     >>> import boViewGui.gui, boViewGui.view
     >>> 
@@ -33,11 +33,11 @@ import logging
 __LOG_LEVEL__ = logging.DEBUG
 
 def get_log(name=__name__):
-    log = logging.getLogger(name)
+    log = logging.getLogger('ViewGui : %s' % name)
     log.setLevel(__LOG_LEVEL__)
     return log
 
-__VERSION__ = (0, 4, 1)
+__VERSION__ = (0, 4, 2)
 
 __version__ = '.'.join([str(n) for n in __VERSION__])
 __author__ = 'Bohdon Sayre'
