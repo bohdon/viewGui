@@ -30,14 +30,14 @@
 
 import logging
 
-__LOG_LEVEL__ = logging.DEBUG
+__LOG_LEVEL__ = logging.WARNING
 
 def get_log(name=__name__):
     log = logging.getLogger('ViewGui : %s' % name)
     log.setLevel(__LOG_LEVEL__)
     return log
 
-__VERSION__ = (0, 4, 2)
+__VERSION__ = (0, 4, 23)
 
 __version__ = '.'.join([str(n) for n in __VERSION__])
 __author__ = 'Bohdon Sayre'
