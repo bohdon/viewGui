@@ -1,7 +1,7 @@
 #!/usr/bin/env mayapy
 # encoding: utf-8
 """
-boViewGui.gui
+viewGui.gui
 
 Created by Bohdon Sayre on 2010-01-01.
 Copyright (c) 2012 Bohdon Sayre. All rights reserved.

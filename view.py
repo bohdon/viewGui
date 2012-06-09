@@ -1,7 +1,7 @@
 #!/usr/bin/env mayapy
 # encoding: utf-8
 """
-boViewGui.view
+viewGui.view
 
 Created by Bohdon Sayre on 2010-01-01.
 Copyright (c) 2012 Bohdon Sayre. All rights reserved.
@@ -53,10 +53,10 @@ class View(object):
         self.gui = gui
         self.showView = gui.showView
         self.viewName = self.__class__.__name__
-        self.log = logging.getLogger('boViewGui.view.{0}'.format(self.viewName))
+        self.log = logging.getLogger('viewGui.view.{0}'.format(self.viewName))
     
-    def __del__(self):    
-        self.log.info('destroyed')
+    def __del__(self):
+        self.log.debug('destroyed')
         self.destroy()
     
     @property
@@ -112,7 +112,6 @@ class View(object):
         """
         links = self.links()
         if links != []:
-            self.log.debug('        building links: %s' % links)
             with formLayout('{0}LinkForm'.format(self.viewName), bgc=self._linkBgc) as form:
                 last = None
                 for viewName in links:
