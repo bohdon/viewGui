@@ -73,10 +73,6 @@ class View(object):
         except:
             pass
     
-    def recreate(self):
-        self.destroy()
-        self.create()
-    
     def create(self):
         self.log.debug('building')
         with self._parent:
@@ -86,15 +82,23 @@ class View(object):
     
     def hide(self):
         self.visible = False
+        self.onHide()
     
     def show(self):
         self.visible = True
+        self.onShow()
+    
+    def onHide(self):
+        pass
+    
+    def onShow(self):
+        pass
     
     def allContent(self):
         """
         Create two frame layouts as a header and body.
         """
-        with frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bs='out') as self._headFrame:
+        with frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bv=False) as self._headFrame:
             self.buildHeader()
         with frameLayout('%sFrame' % self.viewName, mw=self._bodyMargins[0], mh=self._bodyMargins[1], lv=False, bv=False) as self._bodyFrame:
             self.buildBody()
@@ -112,22 +116,23 @@ class View(object):
         """
         links = self.links()
         if links != []:
-            with formLayout('{0}LinkForm'.format(self.viewName), bgc=self._linkBgc) as form:
-                last = None
-                for viewName in links:
-                    name = None
-                    if self.gui.hasView(viewName):
-                        name = self.gui.getViewClass(viewName).displayName
-                    if name is None:
-                        name = viewName
-                    btn = button(l=name, c=Callback(self.showView, viewName), h=18)
-                    if viewName == self.viewName:
-                        btn.setBackgroundColor([.86, .86, .86])
-                    if last is None:
-                        formLayout(form, e=True, af=[(btn, 'left', 0)])
-                    else:
-                        formLayout(form, e=True, ac=[(btn, 'left', 2, last)])
-                    last = btn
+            with frameLayout(lv=False, bs='out'):
+                with formLayout('{0}LinkForm'.format(self.viewName), bgc=self._linkBgc) as form:
+                    last = None
+                    for viewName in links:
+                        name = None
+                        if self.gui.hasView(viewName):
+                            name = self.gui.getViewClass(viewName).displayName
+                        if name is None:
+                            name = viewName
+                        btn = button(l=name, c=Callback(self.showView, viewName), h=18)
+                        if viewName == self.viewName:
+                            btn.setBackgroundColor([.86, .86, .86])
+                        if last is None:
+                            formLayout(form, e=True, af=[(btn, 'left', 0)])
+                        else:
+                            formLayout(form, e=True, ac=[(btn, 'left', 2, last)])
+                        last = btn
         self._headFrame.setManage(len(links) > 0)
 
     def buildBody(self):
