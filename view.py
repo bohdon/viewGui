@@ -1,12 +1,19 @@
+#!/usr/bin/env mayapy
+# encoding: utf-8
+"""
+boViewGui.view
+
+Created by Bohdon Sayre on 2010-01-01.
+Copyright (c) 2012 Bohdon Sayre. All rights reserved.
+"""
 
 
-
-import boViewGui
 from pymel.core import *
+import logging
 
-
-__version__ = '0.3.5'
-
+__all__ = [
+    'View',
+]
 
 class View(object):
     """
@@ -15,23 +22,28 @@ class View(object):
     Views mainly consist of a frameLayout containing any controls
     and their corresponding methods.
     
-    Common control layouts can be created using special methods:
-        viewItem -> create a button that can link to another view
-        frameItem -> create a framed button with text
+    Subclasses of View should override buildBody or buildHeader to build
+    custom content in the view. This content is only built once, unless
+    persistent is set to False, in which case the View is recreated
+    each time that it is shown.
+    
+    The view's metrics can be controlled by setting the width or height
+    attributes, though the Gui can choose to ignore these.  The gui will
+    also remember and restore the last size of the window when it was
+    visible if rememberMetrics is set to True.
     """
     
-    _displayName = 'View'
-    
-    _visible = False
+    displayName = None
+    rememberMetrics = False
+    metrics = None
+    persistent = True
     
     _layout = None
-    _nullLayout = None
     _headFrame = None
     _bodyFrame = None
     _headMargins = [0, 0]
     _bodyMargins = [4, 4]
     _linkBgc = [0.2, 0.2, 0.2]
-    _attachMargin = 0
     
     _viewItemHeight = 34
     _frameItemWidth = 90
@@ -41,81 +53,93 @@ class View(object):
         self.gui = gui
         self.showView = gui.showView
         self.viewName = self.__class__.__name__
-        self.log = boViewGui.get_log('View ({0})'.format(self.viewName))
+        self.log = logging.getLogger('boViewGui.view.{0}'.format(self.viewName))
     
-    def __del__(self):
+    def __del__(self):    
+        self.log.info('destroyed')
         self.destroy()
-        self.log.info('%s has died...' % self.viewName)
+    
+    @property
+    def visible(self):
+        return self._layout.getManage()
+    @visible.setter
+    def visible(self, value):
+        self._layout.setManage(value)
     
     def destroy(self):
-        """Delete the main layout and reset attributes"""
-        try: self._layout.delete()
-        except: pass
+        """ Delete the layout of this view"""
+        try:
+            self._layout.delete()
+        except:
+            pass
     
     def recreate(self):
         self.destroy()
         self.create()
     
     def create(self):
-        """Create the layout."""
-        self.log.debug('    Creating View : %s' % self.viewName)
+        self.log.debug('building')
         with self._parent:
             with formLayout() as self._layout:
                 self.allContent()
-        self.detachView()
+        self.hide()
     
+    def hide(self):
+        self.visible = False
+    
+    def show(self):
+        self.visible = True
     
     def allContent(self):
         """
         Create two frame layouts as a header and body.
         """
         with frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bs='out') as self._headFrame:
-            self.headContent()
+            self.buildHeader()
         with frameLayout('%sFrame' % self.viewName, mw=self._bodyMargins[0], mh=self._bodyMargins[1], lv=False, bv=False) as self._bodyFrame:
-            self.bodyContent()
+            self.buildBody()
         formLayout(self._layout, e=True,
             af=[(self._headFrame, 'top', 0), (self._headFrame, 'left', 0), (self._headFrame, 'right', 0),
                 (self._bodyFrame, 'left', 0), (self._bodyFrame, 'right', 0), (self._bodyFrame, 'bottom', 0)],
             ac=[(self._bodyFrame, 'top', 2, self._headFrame)])
     
-    def headContent(self):
+    def buildHeader(self):
         """
-        Create buttons at the top of the view. These are designed
-        to link to other views, and are often used to display the 
-        hierarchy of views in relation to each other.
+        Create buttons at the top of the view. These link to other views,
+        and display the current view by highlighting it in white.
         
-        If a custom header is desired, this can method should be overrided.
+        If a custom header is desired, this can method should be overridden.
         """
         links = self.links()
         if links != []:
             self.log.debug('        building links: %s' % links)
-            with formLayout('%sLinkForm' % self.viewName, bgc=self._linkBgc) as form:
-                btns = []
-                for i in range(len(links)):
-                    viewName = links[i]
-                    if self.gui._views.has_key(viewName):
-                        name = self.gui._views[viewName]['cls']._displayName
-                    else:
+            with formLayout('{0}LinkForm'.format(self.viewName), bgc=self._linkBgc) as form:
+                last = None
+                for viewName in links:
+                    name = None
+                    if self.gui.hasView(viewName):
+                        name = self.gui.getViewClass(viewName).displayName
+                    if name is None:
                         name = viewName
-                    btns.append( button(l=name, c=Callback(self.showView, viewName), h=18) )
+                    btn = button(l=name, c=Callback(self.showView, viewName), h=18)
                     if viewName == self.viewName:
-                        button(btns[i], e=True, bgc=[.86, .86, .86])
-                    if i == 0:
-                        formLayout(form, e=True, af=[(btns[i], 'left', 0)])
+                        btn.setBackgroundColor([.86, .86, .86])
+                    if last is None:
+                        formLayout(form, e=True, af=[(btn, 'left', 0)])
                     else:
-                        formLayout(form, e=True, ac=[(btns[i], 'left', 2, btns[i-1])])
-            self._headFrame.setVisible(True)
-        else:
-            self._headFrame.setVisible(False)
-    
-    def bodyContent(self):
+                        formLayout(form, e=True, ac=[(btn, 'left', 2, last)])
+                    last = btn
+        self._headFrame.setManage(len(links) > 0)
+
+    def buildBody(self):
         """Create the main content of the view.
         This method should always be overrided."""
+        self.log.warning('buildBody was not overridden')
         pass
     
     def links(self):
         """
-        Return a tuple list of the view names and classes.
+        Return a list of the view names for this view's header.
         This is usually the view's hierarchy, with the current
         view being listed last, and the highest view first.
         This method should always be overriden.
@@ -123,44 +147,6 @@ class View(object):
         ex. ['MainView, 'SecondPageView', 'ThirdPageView', self.viewName]
         """
         return []
-    
-    def hide(self):
-        """Hide the view"""
-        self._visible = False
-        self.detachView()
-        self.updateVisible()
-                             
-    def show(self):
-        """Show the view"""
-        self._visible = True
-        self.attachView()
-        self.updateVisible()
-    
-    
-    def attachView(self):
-        formLayout(self._parent, e=True,
-            af=[(self._layout, 'top', self._attachMargin),
-                (self._layout, 'left', self._attachMargin),
-                (self._layout, 'right', self._attachMargin),
-                (self._layout, 'bottom', self._attachMargin) ]
-        )
-    
-    def detachView(self):
-        formLayout(self._parent, e=True,
-            ap=[(self._layout, 'left', 0, 100)]
-        )
-    
-    def updateVisible(self):
-        """The visible switch has a glitch, therefore
-        it has been swapped with attaching hidden views
-        to the gui form in a way that makes them
-        invisible"""
-        if not self._layout is None:
-            self._layout.setVisible(self._visible)
-            self.log.debug('    %s -> %s' % (self.viewName, self._visible and 'visible' or 'hidden'))
-        else:
-            self.log.error('    %s has not been created yet' % self._layout)
-        setParent('..')
     
     def viewItem(self, viewName, l=None, ann='', bgc=[.25, .25, .25], en=True):
         """Create a button used to link to another view"""
