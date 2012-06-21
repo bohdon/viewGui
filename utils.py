@@ -33,14 +33,15 @@ def getRadialMenuPositions(count):
         return results
 
 
-def gridFormLayout(numberOfRows=None, numberOfColumns=None):
-    return GridFormLayout(numberOfRows, numberOfColumns)
+def gridFormLayout(numberOfRows=None, numberOfColumns=None, spacing=2):
+    return GridFormLayout(numberOfRows, numberOfColumns, spacing)
 
 
 class GridFormLayout(object):
-    def __init__(self, numberOfRows=None, numberOfColumns=None, **kwargs):
+    def __init__(self, numberOfRows=None, numberOfColumns=None, spacing=2, **kwargs):
         self.numberOfRows = numberOfRows
         self.numberOfColumns = numberOfColumns
+        self.spacing = spacing
         self.form = pm.formLayout(**kwargs)
 
     def __enter__(self):
@@ -70,9 +71,9 @@ class GridFormLayout(object):
         for n, element in enumerate(elements):
             j = math.floor(n / nc)
             i = n - (j * nc)
-            attaches.append((element, 'left', 2, 100 * i / nc))
-            attaches.append((element, 'top', 2, 100 * j / nr))
-            attaches.append((element, 'right', 2, 100 * (i + 1) / nc))
-            attaches.append((element, 'bottom', 2, 100 * (j + 1) / nr))
+            attaches.append((element, 'left', self.spacing, 100 * i / nc))
+            attaches.append((element, 'top', self.spacing, 100 * j / nr))
+            attaches.append((element, 'right', self.spacing, 100 * (i + 1) / nc))
+            attaches.append((element, 'bottom', self.spacing, 100 * (j + 1) / nr))
         pm.formLayout(self.form, e=True, ap=attaches)
 
