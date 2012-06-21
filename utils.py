@@ -33,8 +33,8 @@ def getRadialMenuPositions(count):
         return results
 
 
-def gridFormLayout(numberOfRows=None, numberOfColumns=None, spacing=2):
-    return GridFormLayout(numberOfRows, numberOfColumns, spacing)
+def gridFormLayout(numberOfRows=None, numberOfColumns=None, spacing=2, **kwargs):
+    return GridFormLayout(numberOfRows, numberOfColumns, spacing, **kwargs)
 
 
 class GridFormLayout(object):
