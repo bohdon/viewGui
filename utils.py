@@ -32,6 +32,17 @@ def getRadialMenuPositions(count):
                 results.append(None)
         return results
 
+def title(bs='out', *args, **kwargs):
+    """
+    Creates a frame layout with a text item inside. Only exposed control is the
+    border style of the frame layout.
+
+    Returns frame layout and text item.
+    """
+    with pm.frameLayout(lv=False, bs=bs) as frame:
+        txt = pm.text(*args, **kwargs)
+    return frame, txt
+
 
 def gridFormLayout(numberOfRows=None, numberOfColumns=None, spacing=2, **kwargs):
     return GridFormLayout(numberOfRows, numberOfColumns, spacing, **kwargs)
