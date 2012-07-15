@@ -88,3 +88,101 @@ class GridFormLayout(object):
             attaches.append((element, 'bottom', self.spacing, 100 * (j + 1) / nr))
         pm.formLayout(self.form, e=True, ap=attaches)
 
+
+def asList(value):
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        return [value]
+    return value
+
+
+class ItemList(object):
+    """
+    ItemList wraps a textScrollList control allowing you to
+    easily list and retrieve more complex objects.
+
+    The displayed names for each item are determined by
+    the encode method, which can be overridden.
+    """
+    def __init__(self, items=None, format='{name}', encode=None, **kwargs):
+        self._format = format
+        self._customEncode = encode
+        self.build(**kwargs)
+        self.items = items
+
+    @property
+    def items(self):
+        return self._items
+    @items.setter
+    def items(self, value):
+        value = asList(value)
+        self._items = value
+        self.update()
+
+    @property
+    def encode(self):
+        return self._customEncode
+    @encode.setter
+    def encode(self, value):
+        if hasattr(value, '__call__') or value is None:
+            self._customEncode = value
+            self.update()
+
+    @property
+    def format(self):
+        return self._format
+    @format.setter
+    def format(self, value):
+        self._format = str(value)
+        self.update()
+
+    @property
+    def selected(self):
+        return [self.items[i] for i in self.selectedIndeces]
+    @selected.setter
+    def selected(self, value):
+        value = asList(value)
+        indeces = [i for i in range(len(self.items)) if self.items[i] in value]
+        self.selectedIndeces = indeces
+
+    @property
+    def selectedNames(self):
+        return [self._encode(i) for i in self.selected]
+    @selectedNames.setter
+    def selectedNames(self, value):
+        value = asList(value)
+        indeces = [i for i in range(len(self.items)) if self._encode(self.items[i]) in value]
+        self.selectedIndeces = indeces
+
+    @property
+    def selectedIndeces(self):
+        return [i-1 for i in self.control.getSelectIndexedItem()]
+    @selectedIndeces.setter
+    def selectedIndeces(self, value):
+        value = asList(value)
+        indeces = [i+1 for i in value if i in range(len(self.items))]
+        self.control.deselectAll()
+        self.control.setSelectIndexedItem(indeces)
+
+    def build(self, **kwargs):
+        self.control = pm.textScrollList(**kwargs)
+
+    def _encode(self, item):
+        val = item
+        if self._customEncode is not None:
+            val = self._customEncode(item)
+        return str(val)
+
+    def update(self):
+        """ Update the list to represent the current items """
+        names = [self._encode(i) for i in self.items]
+        self.control.removeAll()
+        for i, n in enumerate(names):
+            # format encoded name
+            n = self.format.format(index=i+1, name=n)
+            self.control.append(n)
+
+
+
+
