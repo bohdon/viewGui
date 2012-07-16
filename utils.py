@@ -8,10 +8,18 @@ Copyright (c) 2012 Moonbot Studios. All rights reserved.
 """
 
 import pymel.core as pm
-import sys
-import os
 import math
+import os
+import subprocess
+import sys
 
+
+def asList(value):
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        return [value]
+    return value
 
 def getRadialMenuPositions(count):
     """ Return a list of radial positions for the given number of items """
@@ -87,14 +95,6 @@ class GridFormLayout(object):
             attaches.append((element, 'right', self.spacing, 100 * (i + 1) / nc))
             attaches.append((element, 'bottom', self.spacing, 100 * (j + 1) / nr))
         pm.formLayout(self.form, e=True, ap=attaches)
-
-
-def asList(value):
-    if value is None:
-        return []
-    if not isinstance(value, (list, tuple)):
-        return [value]
-    return value
 
 
 class ItemList(object):
@@ -184,5 +184,136 @@ class ItemList(object):
             self.control.append(n)
 
 
+class ManageableList(ItemList):
+    def __init__(self, *args, **kwargs):
+        super(ManageableList, self).__init__(*args, **kwargs)
+        self.addCommand = None
+        self.removeCommand = None
+        self.clearCommand = None
 
+    def build(self, **kwargs):
+        fkw = {}
+        for k in ('h', 'bgc'):
+            if kwargs.has_key(k):
+                fkw[k] = kwargs[k]
+        with pm.formLayout(**fkw) as form:
+            lst = self.control = pm.textScrollList(**kwargs)
+            add = pm.button(l='+', w=20, h=20, c=pm.Callback(self.onAdd))
+            rem = pm.button(l='-', w=20, h=20, c=pm.Callback(self.onRemove))
+            clr = pm.button(l='x', w=20, h=20, c=pm.Callback(self.onClear))
+            pm.formLayout(form, e=True,
+                af=[(lst, 'left', 0), (lst, 'top', 0), (lst, 'bottom', 0), (clr, 'right', 0),
+                    (add, 'bottom', 0), (rem, 'bottom', 0), (clr, 'bottom', 0)],
+                ac=[(rem, 'right', 4, clr), (add, 'right', 4, rem), (lst, 'right', 4, add)],
+            )
+        self.layout = form
+
+    def setHeight(self, value):
+        self.layout.setHeight(value)
+    def getHeight(self):
+        return self.layout.getHeight()
+
+    def onAdd(self):
+        if self.addCommand is not None:
+            self.addCommand(self)
+
+    def onRemove(self):
+        self.items = [i for i in self.items if i not in self.selected]
+        if self.removeCommand is not None:
+            self.removeCommand(self)
+
+    def onClear(self):
+        self.items = None
+        if self.clearCommand is not None:
+            self.clearCommand(self)
+
+
+class BrowsePathForm(object):
+    def __init__(self, label=None, files=True, labelWidth=50):
+        self.labelWidth = labelWidth
+        self.build()
+        self.label = label
+        self.browseCaption = 'Choose a {itemTerm}'
+        self.browseOkCaption = 'Choose'
+        self.files = files
+        self.changeCommand = None
+
+    @property
+    def path(self):
+        return self.pathField.getText()
+    @path.setter
+    def path(self, value):
+        self.pathField.setText(value)
+
+    @property
+    def directory(self):
+        if os.path.exists(self.path):
+            if os.path.isdir(self.path):
+                return self.path
+            else:
+                return os.path.dirname(self.path)
+
+    @property
+    def label(self):
+        return self.labelText.getLabel()
+    @label.setter
+    def label(self, value):
+        self.labelText.setManage(value is not None)
+        self.labelText.setLabel(value)
+
+    @property
+    def fileMode(self):
+        return 1 if self.files else 2
+
+    @property
+    def itemTerm(self):
+        return 'File' if self.files else 'Directory'
+
+    def build(self):
+        with pm.formLayout() as form:
+            lbl = self.labelText = pm.text(l='', al='right', w=self.labelWidth)
+            pth = self.pathField = pm.textField(tx='', cc=pm.Callback(self.onChange))
+            self.buildShowMenu(self.pathField)
+            brs = self.browseBtn = pm.button(l='Browse', h=20, c=pm.Callback(self.browse))
+            pm.formLayout(form, e=True,
+                af=[(lbl, 'top', 4), (lbl, 'left', 0), (brs, 'right', 0)],
+                ac=[(pth, 'left', 4, lbl), (pth, 'right', 4, brs)],
+            )
+        self.layout = form
+        return form
+
+    def buildShowMenu(self, parent):
+        pm.popupMenu(p=parent)
+        pm.menuItem(l='Show...', c=pm.Callback(self.show))
+
+    def onChange(self):
+        if self.changeCommand is not None:
+            self.changeCommand(self.path)
+
+    def show(self):
+        if os.path.exists(self.path):
+            if os.path.isdir(self.path):
+                path = self.path
+            else:
+                path = os.path.dirname(self.path)
+        if sys.platform == 'win32':
+            cmd = ['explorer.exe']
+        else:
+            cmd = ['open']
+        cmd.append(os.path.normpath(path))
+        subprocess.Popen(cmd)
+
+    def browse(self):
+        kw = dict(
+            cap=self.browseCaption.format(itemTerm=self.itemTerm),
+            okc=self.browseOkCaption,
+            fm=self.fileMode
+        )
+        dir_ = self.directory
+        if dir_ is not None:
+            kw['dir'] = dir_
+        path = pm.fileDialog2(**kw)
+        if path is not None:
+            self.path = path[0]
+            self.onChange()
 
