@@ -100,6 +100,123 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
         row.columnWidth((3, cw / 3.0 * 2))
     return ctl
 
+def layoutForm(form, ratios, spacing=2, offset=0, vertical=False, fullAttach=True, flip=False):
+    """
+    Layout the given form with the given list of ratios.
+    Currently only supports fixed sized controls on the outer edges,
+    eg. ratios of 0 cannot be within two higher ratios.
+
+    `form` -- the formLayout to adjust
+    `ratios` -- a list ratios for each child of the form
+    `spacing` -- the space between controls
+    `offset` -- the space between controls and the edge of the form
+    `vertical` -- whether we should lay out the form veritcally or horizontally
+    `fullAttach` -- whether the sides for each control should also be attached or left alone
+    `flip` -- attach the bottom or right sides first
+    """
+    return layoutFormChildren(form, form.getChildren(), ratios, spacing, offset, vertical, fullAttach, flip)
+
+
+def layoutFormChildren(form, children, ratios, spacing=2, offset=0, vertical=False, fullAttach=True, flip=False):
+    """
+    Layout the given form and specified children with the given ratios.
+
+    `form` -- the formLayout to adjust
+    `children` -- the list of children associated with the list of ratios
+    `ratios` -- a list ratios for each child of the form
+    `spacing` -- the space between controls
+    `offset` -- the space between controls and the edge of the form
+    `vertical` -- whether we should lay out the form veritcally or horizontally
+    `fullAttach` -- whether the sides for each control should also be attached or left alone
+    `flip` -- attach the bottom or right sides first
+    """
+    children = asList(children)
+    ratios = asList(ratios)
+    if len(ratios) != len(children):
+        raise ValueError('the list of ratios must match the list of children in the form')
+    divs = form.getNumberOfDivisions()
+    total = sum(ratios)
+    attached = []
+    pairs = zip(children, ratios)
+    akey = 'top' if vertical else 'left'
+    bkey = 'bottom' if vertical else 'right'
+    fixedEnds = []
+    # attach all fixed-width
+    fixedGrps = ((pairs, akey), (reversed(pairs), bkey))
+    if flip:
+        fixedGrps = reversed(fixedGrps)
+    for loop, key in fixedGrps:
+        prev = None
+        for child, r in loop:
+            if r is not 0 or child in attached:
+                fixedEnds.append(prev)
+                break
+            if prev is None:
+                kw = dict(af=[(child, key, offset)])
+            else:
+                kw = dict(ac=[(child, key, spacing, prev)])
+            pm.formLayout(form, e=True, **kw)
+            prev = child
+            attached.append(child)
+    # attach all expanding
+    expand = [p for p in pairs if p[0] not in attached]
+    curUnit = 0
+    lastPos = None
+    for i in range(len(expand)):
+        child, r = expand[i]
+        aused = False
+        if i == 0:
+            aused = True
+            # attach to first fixed group
+            if fixedEnds[0] is None:
+                pm.formLayout(form, e=True, af=[(child, akey, offset)])
+            else:
+                pm.formLayout(form, e=True, ac=[(child, akey, spacing, fixedEnds[0])])
+        bused = False
+        if i == len(expand) - 1:
+            bused = True
+            # attach to second fixed group
+            if fixedEnds[1] is None:
+                pm.formLayout(form, e=True, af=[(child, bkey, offset)])
+            else:
+                pm.formLayout(form, e=True, ac=[(child, bkey, spacing, fixedEnds[1])])
+        # attach to position
+        pos = (float(r+curUnit) / total) * divs
+        curUnit += r
+        if not aused:
+            pm.formLayout(form, e=True, ap=[(child, akey, spacing, lastPos)])
+        if not bused:
+            pm.formLayout(form, e=True, ap=[(child, bkey, spacing, pos)])
+        lastPos = pos
+    # full attach
+    if fullAttach:
+        aokey = 'left' if vertical else 'top'
+        bokey = 'right' if vertical else 'bottom'
+        for c in children:
+            af = [(c, k, offset) for k in (aokey, bokey)]
+            pm.formLayout(form, e=True, af=af)
+
+
+def attachFormChildren(form, children, terms, offset=2, ctl=None, pos=None):
+    """
+    Macro way to attach multiple children to a control, side, or position.
+    """
+    children = asList(children)
+    terms = asList(terms)
+    if ctl is not None:
+        key = 'ac'
+        format = [offset, ctl]
+    elif pos is not None:
+        key = 'ap'
+        format = [offset, pos]
+    else:
+        key = 'af'
+        format = [offset]
+    items = [[c, t] + format for c in children for t in terms]
+    kw = {key:items}
+    pm.formLayout(form, e=True, **kw)
+
+
 
 def gridFormLayout(numberOfRows=None, numberOfColumns=None, spacing=2, **kwargs):
     return GridFormLayout(numberOfRows, numberOfColumns, spacing, **kwargs)
