@@ -10,6 +10,7 @@ Copyright (c) 2012 Moonbot Studios. All rights reserved.
 import pymel.core as pm
 import math
 import os
+import re
 import subprocess
 import sys
 
@@ -20,6 +21,10 @@ def asList(value):
     if not isinstance(value, (list, tuple)):
         return [value]
     return value
+
+def getAttrTitle(attr):
+    n = attr.longName()
+    return re.sub('([A-Z])', ' \\1', n).title()
 
 def getRadialMenuPositions(count):
     """ Return a list of radial positions for the given number of items """
@@ -50,6 +55,50 @@ def title(bs='out', *args, **kwargs):
     with pm.frameLayout(lv=False, bs=bs) as frame:
         txt = pm.text(*args, **kwargs)
     return frame, txt
+
+
+def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
+    """
+    Automatically create a control for the given node attribute.
+    This returns a attrControlGrp but sets it up with more configurability.
+
+    `cw` -- the content width
+    `lw` -- the label width
+    `ls` -- the spacing between the label and content
+    `al` -- the label alignment
+    """
+    ctl = pm.attrControlGrp(a=attr, **kwargs)
+    children = ctl.getChildren()
+    count = len(children)
+    label, child1 = children[0:2]
+    label = pm.ui.Text(label)
+    row = label.parent()
+    # increase label padding
+    row.columnAttach((1, 'right', ls))
+    row.columnAlign((1, al))
+    label.setWidth(lw)
+    label.setAlign(al)
+    # resize contents
+    row.columnWidth((1, lw))
+    for i in range(1, count):
+        w = cw / float(count - 1)
+        row.columnWidth((i+1, w))
+    # handle check box labels
+    if isinstance(child1, pm.ui.CheckBox):
+        label.setLabel(child1.getLabel())
+        child1.setLabel('')
+        if kwargs.has_key('h'):
+            h = kwargs['h']
+        else:
+            h = 20
+        row.setHeight(h)
+    # handle single fields
+    if count == 2:
+        row.columnWidth((2, cw / 3.0))
+    # handle sliders with nav button
+    if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
+        row.columnWidth((3, cw / 3.0 * 2))
+    return ctl
 
 
 def gridFormLayout(numberOfRows=None, numberOfColumns=None, spacing=2, **kwargs):
@@ -198,9 +247,9 @@ class ManageableList(ItemList):
                 fkw[k] = kwargs[k]
         with pm.formLayout(**fkw) as form:
             lst = self.control = pm.textScrollList(**kwargs)
-            add = pm.button(l='+', w=20, h=20, c=pm.Callback(self.onAdd))
-            rem = pm.button(l='-', w=20, h=20, c=pm.Callback(self.onRemove))
-            clr = pm.button(l='x', w=20, h=20, c=pm.Callback(self.onClear))
+            add = pm.button(l='+', w=20, h=20, ann='Add', c=pm.Callback(self.onAdd))
+            rem = pm.button(l='-', w=20, h=20, ann='Remove', c=pm.Callback(self.onRemove))
+            clr = pm.button(l='x', w=20, h=20, ann='Clear', c=pm.Callback(self.onClear))
             pm.formLayout(form, e=True,
                 af=[(lst, 'left', 0), (lst, 'top', 0), (lst, 'bottom', 0), (clr, 'right', 0),
                     (add, 'bottom', 0), (rem, 'bottom', 0), (clr, 'bottom', 0)],
