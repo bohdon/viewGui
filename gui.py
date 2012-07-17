@@ -7,7 +7,7 @@ Created by Bohdon Sayre on 2010-01-01.
 Copyright (c) 2012 Bohdon Sayre. All rights reserved.
 """
 
-from pymel.core import *
+import pymel.core as pm
 import logging
 import view
 
@@ -48,6 +48,7 @@ class Gui(object):
         self._defaultView = None
         self._curViewName = None
         self._mainLayout = None
+        self._scriptJobs = {}
         
         if viewClasses is not None:
             if not isinstance(viewClasses, (list, tuple)):
@@ -148,33 +149,54 @@ class Gui(object):
         """ Build the window and show the default view """
         self.deleteViews()
         
-        if window(self.winName, ex=True):
-            deleteUI(self.winName)
+        if pm.window(self.winName, ex=True):
+            pm.deleteUI(self.winName)
         
         self._win = None
         self.applyMetrics()
-        with window(self.winName, title=self.title) as self._win:
-            with frameLayout('mainForm', lv=False, bv=False) as self._mainLayout:
+        with pm.window(self.winName, title=self.title) as self._win:
+            with pm.frameLayout('mainForm', lv=False, bv=False) as self._mainLayout:
                 self.showDefaultView()
         
-        scriptJob(uid=(self._win, Callback(self.winClosed)))
+        pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
+
+    def setupScriptJob(self, event):
+        if not self._scriptJobs.has_key(event):
+            # setup script job
+            eventmap = dict(
+                onSelectionChange=['SelectionChanged'],
+                onSceneChange=['SceneOpened', 'NewSceneOpened'],
+                onUndo=['Undo'],
+                onRedo=['Redo'],
+            )
+            self._scriptJobs[event] = []
+            for key in eventmap[event]:
+                j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.window)
+                self._scriptJobs[event].append(j)
+
+    def scriptJobUpdate(self, event):
+        v = self.curView
+        if v is not None:
+            fnc = getattr(v, event)
+            if fnc is not None:
+                fnc()
     
     def applyMetrics(self, m=None):
         """Set window size and position by editing the window prefs"""
         if m is None:
             m = self.metrics
-        if not windowPref(self.winName, ex=True):
-            windowPref(self.winName, tlc=DEFAULT_TLC, w=DEFAULT_SIZE[0], h=DEFAULT_SIZE[1])
+        if not pm.windowPref(self.winName, ex=True):
+            pm.windowPref(self.winName, tlc=DEFAULT_TLC, w=DEFAULT_SIZE[0], h=DEFAULT_SIZE[1])
         if m.has_key('w') and m['w'] is not None:
-            windowPref(self.winName, e=True, w=m['w'])
+            pm.windowPref(self.winName, e=True, w=m['w'])
             if self._win is not None:
                 self._win.setWidth(m['w'])
         if m.has_key('h') and m['h'] is not None:
-            windowPref(self.winName, e=True, h=m['h'])
+            pm.windowPref(self.winName, e=True, h=m['h'])
             if self._win is not None:
                 self._win.setHeight(m['h'])
         if m.has_key('tlc') and m['tlc'] is not None:
-            windowPref(self.winName, e=True, tlc=m['tlc'])
+            pm.windowPref(self.winName, e=True, tlc=m['tlc'])
     
     def winClosed(self):
         LOG.debug('gui closed')
@@ -206,17 +228,17 @@ class Gui(object):
             return
         self.hideCurView()
         # create and show
-        inst = self.getView(viewName)
+        v = self.getView(viewName)
         # check persistence
-        if inst is not None and not inst.persistent:
+        if v is not None and not v.persistent:
             self.deleteView(viewName)
-            inst = None
-        if inst is None:
+            v = None
+        if v is None:
             self._createView(viewName)
-            inst = self.getView(viewName)
-        inst.show()
+            v = self.getView(viewName)
+        v.show()
         # apply metrics
-        if inst.rememberMetrics and self._viewMetrics.has_key(viewName):
+        if v.rememberMetrics and self._viewMetrics.has_key(viewName):
             self.applyMetrics(self._viewMetrics[viewName])
         self._curViewName = viewName
         LOG.debug('showed view {0}'.format(viewName))
@@ -227,11 +249,15 @@ class Gui(object):
             return
         if self.getView(viewName) is None:
             c = self.getViewClass(viewName)
-            inst = c(self._mainLayout, self)
-            inst.create()
-            self._viewInst[viewName] = inst
-            if inst.metrics is not None:
-                self._viewMetrics[viewName] = inst.metrics.copy()
+            v = c(self._mainLayout, self)
+            v.create()
+            self._viewInst[viewName] = v
+            if v.metrics is not None:
+                self._viewMetrics[viewName] = v.metrics.copy()
+            # check if requires script jobs
+            for e in ('onSelectionChange', 'onSceneChange', 'onUndo', 'onRedo'):
+                if getattr(v, e) is not None:
+                    self.setupScriptJob(e)
             LOG.debug('created view {0}'.format(viewName))
     
     def hideCurView(self):

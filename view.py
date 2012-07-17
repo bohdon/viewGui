@@ -37,6 +37,10 @@ class View(object):
     rememberMetrics = False
     metrics = None
     persistent = True
+    onSelectionChange = None
+    onSceneChange = None
+    onUndo = None
+    onRedo = None
     
     _layout = None
     _headFrame = None
@@ -77,7 +81,7 @@ class View(object):
         self.log.debug('building')
         with self._parent:
             with formLayout() as self._layout:
-                self.allContent()
+                self.build()
         self.hide()
     
     def hide(self):
@@ -93,11 +97,9 @@ class View(object):
     
     def onShow(self):
         pass
-    
-    def allContent(self):
-        """
-        Create two frame layouts as a header and body.
-        """
+
+    def build(self):
+        """ Build the main header and body for this view. """
         with frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bv=False) as self._headFrame:
             self.buildHeader()
         with frameLayout('%sFrame' % self.viewName, mw=self._bodyMargins[0], mh=self._bodyMargins[1], lv=False, bv=False) as self._bodyFrame:
