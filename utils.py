@@ -92,8 +92,8 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
         else:
             h = 20
         row.setHeight(h)
-    # handle single fields
-    if count == 2:
+    # handle single number fields
+    if attr.type() in ('long', 'int', 'double', 'float'):
         row.columnWidth((2, cw / 3.0))
     # handle sliders with nav button
     if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
