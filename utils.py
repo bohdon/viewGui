@@ -394,7 +394,33 @@ class ManageableList(ItemList):
             self.clearCommand(self)
 
 
+class NodeList(ItemList):
+    def __init__(self, *args, **kwargs):
+        kwargs['sc'] = pm.Callback(self.onSelect)
+        super(NodeList, self).__init__(*args, **kwargs)
+        self.selectCommand = None
+
+    @property
+    def items(self):
+        return self._items
+    @items.setter
+    def items(self, value):
+        value = asList(value)
+        value = [v for v in value if hasattr(v, 'select') or isinstance(v, pm.Attribute)]
+        self._items = value
+        self.update()
+    
+    def onSelect(self):
+        pm.select(self.selected)
+        if hasattr(self.selectCommand, '__call__'):
+            self.selectedCommand(self.selected)
+
+
 class BrowsePathForm(object):
+    """
+    Creates a form with a path text field and a button
+    to browse for an existing file or folder.
+    """
     def __init__(self, label=None, files=True, labelWidth=50):
         self.labelWidth = labelWidth
         self.build()
@@ -482,4 +508,69 @@ class BrowsePathForm(object):
         if path is not None:
             self.path = path[0]
             self.onChange()
+
+
+class PathButtonForm(object):
+    """
+    Creates a row of buttons that represent each item of
+    a path. Clicking on a button returns the path to that item.
+    """
+    ROOT_REGEX = re.compile('^(/|//|[a-zA-Z]+:)[^/]*$')
+
+    def __init__(self, path=None, command=None):
+        self._path = path
+        self.command = command
+        self.build()
+
+    @property
+    def path(self):
+        return self._path
+    @path.setter
+    def path(self, value):
+        if value is not None:
+            value = value.replace('\\', '/')
+        self._path = value
+        self.update()
+
+    @property
+    def pathItems(self):
+        items = []
+        if self.path is None:
+            return items
+        pth = self.path
+        while True:
+            items.append(pth)
+            if PathButtonForm.ROOT_REGEX.match(pth):
+                break
+            pth, base = os.path.split(pth)
+            if not len(pth) or not len(base):
+                # failsafe
+                break
+        return list(reversed(items))
+
+    def build(self):
+        with pm.columnLayout() as self.layout:
+            self.buildPathForm()
+
+    def buildPathForm(self):
+        with pm.formLayout() as form:
+            paths = self.pathItems
+            for i, path in enumerate(paths):
+                if i != 0:
+                    pm.text(l='/')
+                pm.button(l=os.path.basename(path), h=18, bgc=(0.3, 0.3, 0.3), c=pm.Callback(self._command, path))
+            layoutForm(form, [0] * (len(paths)*2 - 1))
+
+    def _command(self, path):
+        if hasattr(self.command, '__call__'):
+            pm.evalDeferred(pm.Callback(self.command, path))
+
+    def update(self):
+        # TODO: update buttons in a relative fashion
+        # so that clicked buttons dont get deleted and recreated
+        self.layout.clear()
+        with self.layout:
+            self.buildPathForm()
+
+
 
