@@ -540,7 +540,7 @@ class PathButtonForm(object):
         pth = self.path
         while True:
             items.append(pth)
-            if PathButtonForm.ROOT_REGEX.match(pth):
+            if self.ROOT_REGEX.match(pth):
                 break
             pth, base = os.path.split(pth)
             if not len(pth) or not len(base):
@@ -555,11 +555,17 @@ class PathButtonForm(object):
     def buildPathForm(self):
         with pm.formLayout() as form:
             paths = self.pathItems
+            seps = 0
             for i, path in enumerate(paths):
                 if i != 0:
+                    seps += 1
                     pm.text(l='/')
+                elif self.ROOT_REGEX.match(path):
+                    if path.startswith('/'):
+                        seps += 1
+                        pm.text(l=re.search('/+', path).group())
                 pm.button(l=os.path.basename(path), h=18, bgc=(0.3, 0.3, 0.3), c=pm.Callback(self._command, path))
-            layoutForm(form, [0] * (len(paths)*2 - 1))
+            layoutForm(form, [0] * (len(paths) + seps))
 
     def _command(self, path):
         if hasattr(self.command, '__call__'):
