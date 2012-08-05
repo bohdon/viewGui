@@ -515,7 +515,7 @@ ROOT_REGEX = re.compile('^(/|//|[a-zA-Z]+:)[^/]*$')
 
 def getPathItems(path):
     items = []
-    if path is None:
+    if path is None or not len(path.strip()):
         return items
     pth = path
     while True:
@@ -533,12 +533,24 @@ class PathButtonForm(object):
     """
     Creates a row of buttons that represent each item of
     a path. Clicking on a button returns the path to that item.
+
+    By setting the `rootPath` property, only the relative path
+    to the root path will actually appear as buttons.
+
+    Setting `browse` to True will cause option menus to appear
+    as the last path item.  `browseDepth` controls how many
+    path items of the current path will also be option menus.
+
+    Directories can be excluded from browse option menus by setting
+    the `browseExcludes` list to the desired exclude regexes.
     """
 
-    def __init__(self, path=None, browse=False, command=None):
+    def __init__(self, path=None, browse=False, command=None, bgc=(0.3, 0.3, 0.3)):
         self._path = path
         self._rootPath = None
         self._browse = browse
+        self.bgc = bgc
+        self.browseDepth = 1
         self.browseExcludes = ['\..*']
         self.command = command
         self.build()
@@ -550,6 +562,8 @@ class PathButtonForm(object):
     def rootPath(self, value):
         if value is not None:
             value = value.replace('\\', '/')
+            if not len(value.strip()):
+                value = None
         if self._rootPath != value:
             self._rootPath = value
             self.update()
@@ -561,6 +575,8 @@ class PathButtonForm(object):
     def path(self, value):
         if value is not None:
             value = value.replace('\\', '/')
+            if not len(value.strip()):
+                value = None
         if self._path != value:
             self._path = value
             self.update()
@@ -583,7 +599,7 @@ class PathButtonForm(object):
         if None not in (self.rootPath, self.path) and self.rootPath in self.path:
             rootItems = getPathItems(self.rootPath)
             return len(rootItems)
-        return 0
+        return -1
 
     @property
     def browse(self):
@@ -593,9 +609,9 @@ class PathButtonForm(object):
         self._browse = value
         self.update()
 
-    def getBrowseDirs(self):
-        if os.path.isdir(self.path):
-            items = [os.path.join(self.path, f) for f in os.listdir(self.path)]
+    def getBrowseDirs(self, path):
+        if os.path.isdir(path):
+            items = [os.path.join(path, f) for f in os.listdir(path)]
             dirs = [d for d in items if os.path.isdir(d)]
             filtered = dirs
             if self.browseExcludes is not None:
@@ -611,40 +627,56 @@ class PathButtonForm(object):
             self.buildPathForm()
 
     def buildPathForm(self):
-        with pm.formLayout() as form:
+        with pm.formLayout(h=20) as form:
             paths = self.pathItems
             skipCount = self._numRelItems()
             children = 0
             for i, path in enumerate(paths):
-                if i < (skipCount - 1):
+                if i < (skipCount-1):
                     continue
+                # insert root prefix if necessary
                 if ROOT_REGEX.match(path):
                     if path.startswith('/'):
                         pm.text(l=re.search('/+', path).group())
                         children += 1
-                pm.button(l=os.path.basename(path), h=20, bgc=(0.3, 0.3, 0.3), c=pm.Callback(self._command, path))
+                # insert button or browse menu
+                if self.browse and i >= len(paths) - self.browseDepth and i > (skipCount-1):
+                    dir_ = os.path.dirname(path)
+                    subPaths = self.getBrowseDirs(dir_)
+                    self.buildPathsMenu(dir_, subPaths, current=path)
+                else:
+                    btn = pm.button(l=os.path.basename(path), h=20, c=pm.Callback(self._command, path))
+                    if self.bgc is not None:
+                        btn.setBackgroundColor(self.bgc)
                 children += 1
+                # insert path separators and final browse menu
                 if i != len(paths) - 1:
                     pm.text(l='/')
                     children += 1
                 elif self.browse:
-                    paths = self.getBrowseDirs()
-                    if len(paths):
+                    subPaths = self.getBrowseDirs(path)
+                    if len(subPaths):
                         pm.text(l='/')
-                        self.buildPathsMenu(paths)
+                        self.buildPathsMenu(self.path, subPaths)
                         children += 2
             layoutForm(form, [0] * children, fullAttach=False)
 
-    def buildPathsMenu(self, paths):
-        self.browseMenu = pm.optionMenu(h=20, bgc=(0.3, 0.3, 0.3), cc=pm.Callback(self._browseCommand))
-        pm.menuItem(l='')
+    def buildPathsMenu(self, root, paths, current=None):
+        menu = pm.optionMenu(h=20)
+        if self.bgc is not None:
+            menu.setBackgroundColor(self.bgc)
+        menu.changeCommand(pm.Callback(self._browseCommand, root, menu))
+        if current is None:
+            pm.menuItem(l='')
         for path in paths:
             pm.menuItem(l=os.path.basename(path))
+        if current is not None:
+            menu.setValue(os.path.basename(current))
 
-    def _browseCommand(self):
-        relPath = self.browseMenu.getValue()
+    def _browseCommand(self, root, menu):
+        relPath = menu.getValue()
         if len(relPath):
-            path = os.path.join(self.path, relPath)
+            path = os.path.join(root, relPath)
             self._command(path)
 
     def _command(self, path):
