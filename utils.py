@@ -406,14 +406,14 @@ class NodeList(ItemList):
     @items.setter
     def items(self, value):
         value = asList(value)
-        value = [v for v in value if hasattr(v, 'select') or isinstance(v, pm.Attribute)]
         self._items = value
         self.update()
     
     def onSelect(self):
-        pm.select(self.selected)
+        nodes = [n for n in self.selected if hasattr(n, 'select') or isinstance(n, pm.Attribute)]
+        pm.select(nodes)
         if hasattr(self.selectCommand, '__call__'):
-            self.selectedCommand(self.selected)
+            self.selectedCommand(nodes)
 
 
 class BrowsePathForm(object):
@@ -510,17 +510,49 @@ class BrowsePathForm(object):
             self.onChange()
 
 
+
+ROOT_REGEX = re.compile('^(/|//|[a-zA-Z]+:)[^/]*$')
+
+def getPathItems(path):
+    items = []
+    if path is None:
+        return items
+    pth = path
+    while True:
+        items.append(pth)
+        if ROOT_REGEX.match(pth):
+            break
+        pth, base = os.path.split(pth)
+        if not len(pth) or not len(base):
+            # failsafe
+            break
+    return list(reversed(items))
+
+
 class PathButtonForm(object):
     """
     Creates a row of buttons that represent each item of
     a path. Clicking on a button returns the path to that item.
     """
-    ROOT_REGEX = re.compile('^(/|//|[a-zA-Z]+:)[^/]*$')
 
-    def __init__(self, path=None, command=None):
+    def __init__(self, path=None, browse=False, command=None):
         self._path = path
+        self._rootPath = None
+        self._browse = browse
+        self.browseExcludes = ['\..*']
         self.command = command
         self.build()
+
+    @property
+    def rootPath(self):
+        return self._rootPath
+    @rootPath.setter
+    def rootPath(self, value):
+        if value is not None:
+            value = value.replace('\\', '/')
+        if self._rootPath != value:
+            self._rootPath = value
+            self.update()
 
     @property
     def path(self):
@@ -529,24 +561,50 @@ class PathButtonForm(object):
     def path(self, value):
         if value is not None:
             value = value.replace('\\', '/')
-        self._path = value
-        self.update()
+        if self._path != value:
+            self._path = value
+            self.update()
+
+    @property
+    def relPath(self):
+        if None not in (self.rootPath, self.path) and self.rootPath in self.path:
+            return os.path.relpath(self.path, self.rootPath)
+        return self.path
 
     @property
     def pathItems(self):
-        items = []
-        if self.path is None:
-            return items
-        pth = self.path
-        while True:
-            items.append(pth)
-            if self.ROOT_REGEX.match(pth):
-                break
-            pth, base = os.path.split(pth)
-            if not len(pth) or not len(base):
-                # failsafe
-                break
-        return list(reversed(items))
+        return getPathItems(self.path)
+
+    def _numRelItems(self):
+        """
+        Return the number of items in the path that are
+        part of the root path and should not be displayed.
+        """
+        if None not in (self.rootPath, self.path) and self.rootPath in self.path:
+            rootItems = getPathItems(self.rootPath)
+            return len(rootItems)
+        return 0
+
+    @property
+    def browse(self):
+        return self._browse
+    @browse.setter
+    def browse(self, value):
+        self._browse = value
+        self.update()
+
+    def getBrowseDirs(self):
+        if os.path.isdir(self.path):
+            items = [os.path.join(self.path, f) for f in os.listdir(self.path)]
+            dirs = [d for d in items if os.path.isdir(d)]
+            filtered = dirs
+            if self.browseExcludes is not None:
+                filtered = []
+                for d in dirs:
+                    if not any([re.match(f, os.path.basename(d)) for f in self.browseExcludes]):
+                        filtered.append(d)
+            return filtered
+        return []
 
     def build(self):
         with pm.columnLayout() as self.layout:
@@ -555,17 +613,39 @@ class PathButtonForm(object):
     def buildPathForm(self):
         with pm.formLayout() as form:
             paths = self.pathItems
-            seps = 0
+            skipCount = self._numRelItems()
+            children = 0
             for i, path in enumerate(paths):
-                if i != 0:
-                    seps += 1
-                    pm.text(l='/')
-                elif self.ROOT_REGEX.match(path):
+                if i < (skipCount - 1):
+                    continue
+                if ROOT_REGEX.match(path):
                     if path.startswith('/'):
-                        seps += 1
                         pm.text(l=re.search('/+', path).group())
-                pm.button(l=os.path.basename(path), h=18, bgc=(0.3, 0.3, 0.3), c=pm.Callback(self._command, path))
-            layoutForm(form, [0] * (len(paths) + seps))
+                        children += 1
+                pm.button(l=os.path.basename(path), h=20, bgc=(0.3, 0.3, 0.3), c=pm.Callback(self._command, path))
+                children += 1
+                if i != len(paths) - 1:
+                    pm.text(l='/')
+                    children += 1
+                elif self.browse:
+                    paths = self.getBrowseDirs()
+                    if len(paths):
+                        pm.text(l='/')
+                        self.buildPathsMenu(paths)
+                        children += 2
+            layoutForm(form, [0] * children, fullAttach=False)
+
+    def buildPathsMenu(self, paths):
+        self.browseMenu = pm.optionMenu(h=20, bgc=(0.3, 0.3, 0.3), cc=pm.Callback(self._browseCommand))
+        pm.menuItem(l='')
+        for path in paths:
+            pm.menuItem(l=os.path.basename(path))
+
+    def _browseCommand(self):
+        relPath = self.browseMenu.getValue()
+        if len(relPath):
+            path = os.path.join(self.path, relPath)
+            self._command(path)
 
     def _command(self, path):
         if hasattr(self.command, '__call__'):
