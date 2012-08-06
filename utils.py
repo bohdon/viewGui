@@ -416,6 +416,54 @@ class NodeList(ItemList):
             self.selectedCommand(nodes)
 
 
+class ModeForm(object):
+    """
+    Creates a form with controls that operate under one of a given
+    list of modes. Primarily creates a collection of icon text
+    radio buttons with each modes title as the label, and provides
+    an interface for getting or setting the mode easily.
+    Set the `modeChangedCommand` property to get callbacks when
+    the mode is changed in the ui.
+    """
+    def __init__(self, modes, annotations=None, modeChangedCommand=None):
+        self.modes = pm.util.enum.Enum(self.__class__.__name__, modes)
+        self.annotations = annotations
+        self.build()
+        self.modeChangedCommand = modeChangedCommand
+
+    @property
+    def mode(self):
+        return self._mode
+    @mode.setter
+    def mode(self, value):
+        m = self.modes[self.modes.getIndex(value)]
+        self._mode = m
+        items = self.rdc.getCollectionItemArray()
+        pm.ui.PyUI(items[int(m)]).setSelect(True)
+
+    def build(self, ratios=None):
+        if ratios is None:
+            ratios = [1] * len(self.modes)
+        with pm.formLayout() as self.layout:
+            self.rdc = pm.iconTextRadioCollection(p=self.layout)
+            for i, m in enumerate(self.modes):
+                kw = dict(
+                    l=m.key.title(),
+                    st='textOnly',
+                    onc=pm.Callback(self.modeChanged, m)
+                )
+                if self.annotations is not None and len(self.annotations) > i:
+                    kw['ann'] = self.annotations[i]
+                pm.iconTextRadioButton(**kw)
+            layoutForm(self.layout, ratios)
+
+    def modeChanged(self, mode):
+        self.mode = mode
+        if hasattr(self.modeChangedCommand, '__call__'):
+            self.modeChangedCommand(mode)
+
+
+
 class BrowsePathForm(object):
     """
     Creates a form with a path text field and a button

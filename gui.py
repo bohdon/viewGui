@@ -170,15 +170,19 @@ class Gui(object):
                 onRedo=['Redo'],
             )
             self._scriptJobs[event] = []
-            for key in eventmap[event]:
-                j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.window)
+            if eventmap.has_key(event):
+                for key in eventmap[event]:
+                    j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.window)
+                    self._scriptJobs[event].append(j)
+            elif event == 'onWindowClosed':
+                j = pm.scriptJob(uid=(self.window, pm.Callback(self.scriptJobUpdate, event)), runOnce=True)
                 self._scriptJobs[event].append(j)
 
     def scriptJobUpdate(self, event):
         v = self.curView
         if v is not None:
             fnc = getattr(v, event)
-            if fnc is not None:
+            if hasattr(fnc, '__call__'):
                 fnc()
     
     def applyMetrics(self, m=None):
@@ -255,8 +259,8 @@ class Gui(object):
             if v.metrics is not None:
                 self._viewMetrics[viewName] = v.metrics.copy()
             # check if requires script jobs
-            for e in ('onSelectionChange', 'onSceneChange', 'onUndo', 'onRedo'):
-                if getattr(v, e) is not None:
+            for e in ('onSelectionChange', 'onSceneChange', 'onUndo', 'onRedo', 'onWindowClosed'):
+                if hasattr(getattr(v, e), '__call__'):
                     self.setupScriptJob(e)
             LOG.debug('created view {0}'.format(viewName))
     

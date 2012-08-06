@@ -41,6 +41,7 @@ class View(object):
     onSceneChange = None
     onUndo = None
     onRedo = None
+    onWindowClosed = None
     
     _layout = None
     _headFrame = None
