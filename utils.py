@@ -15,6 +15,9 @@ import subprocess
 import sys
 
 
+SHOW_MSG = 'Show in ' + 'Finder' if sys.platform == 'darwin' else 'Explorer'
+
+
 def asList(value):
     if value is None:
         return []
@@ -524,7 +527,7 @@ class BrowsePathForm(object):
 
     def buildShowMenu(self, parent):
         pm.popupMenu(p=parent)
-        pm.menuItem(l='Show...', c=pm.Callback(self.show))
+        pm.menuItem(l=SHOW_MSG, c=pm.Callback(self.show))
 
     def onChange(self):
         if self.changeCommand is not None:
@@ -536,12 +539,7 @@ class BrowsePathForm(object):
                 path = self.path
             else:
                 path = os.path.dirname(self.path)
-        if sys.platform == 'win32':
-            cmd = ['explorer.exe']
-        else:
-            cmd = ['open']
-        cmd.append(os.path.normpath(path))
-        subprocess.Popen(cmd)
+        show(path)
 
     def browse(self):
         kw = dict(
@@ -658,17 +656,7 @@ class PathButtonForm(object):
         self.update()
 
     def getBrowseDirs(self, path):
-        if os.path.isdir(path):
-            items = [os.path.join(path, f) for f in os.listdir(path)]
-            dirs = [d for d in items if os.path.isdir(d)]
-            filtered = dirs
-            if self.browseExcludes is not None:
-                filtered = []
-                for d in dirs:
-                    if not any([re.match(f, os.path.basename(d)) for f in self.browseExcludes]):
-                        filtered.append(d)
-            return filtered
-        return []
+        return getSubDirs(path, self.browseExcludes)
 
     def build(self):
         with pm.columnLayout() as self.layout:
@@ -691,9 +679,11 @@ class PathButtonForm(object):
                 if self.browse and i >= len(paths) - self.browseDepth and i > (skipCount-1):
                     dir_ = os.path.dirname(path)
                     subPaths = self.getBrowseDirs(dir_)
-                    self.buildPathsMenu(dir_, subPaths, current=path)
+                    mnu = self.buildPathsMenu(dir_, subPaths, current=path)
+                    buildShowMenu(mnu, path)
                 else:
                     btn = pm.button(l=os.path.basename(path), h=20, c=pm.Callback(self._command, path))
+                    buildShowMenu(btn, path)
                     if self.bgc is not None:
                         btn.setBackgroundColor(self.bgc)
                 children += 1
@@ -720,6 +710,7 @@ class PathButtonForm(object):
             pm.menuItem(l=os.path.basename(path))
         if current is not None:
             menu.setValue(os.path.basename(current))
+        return menu
 
     def _browseCommand(self, root, menu):
         relPath = menu.getValue()
@@ -738,5 +729,57 @@ class PathButtonForm(object):
         with self.layout:
             self.buildPathForm()
 
+
+def buildShowMenu(ctl, path=None, obj=None, attr=None, l=None):
+    """
+    Build a show in finder/explorer menu on the given control.
+    The path can be given outright, or be provided as an object,
+    attribute pair that will be retrieved on command.
+    """
+    pm.popupMenu(p=ctl)
+    return buildShowMenuItem(path, obj, attr, l)
+
+def buildShowMenuItem(path=None, obj=None, attr=None, l=None):
+    if l is None:
+        l = SHOW_MSG
+    return pm.menuItem(l=l, c=getShowCommand(path, obj, attr))
+
+def getShowCommand(path=None, obj=None, attr=None):
+    """
+    Get a command that will show the given path or obj.attr in finder/explorer.
+    """
+    def _show():
+        show(getattr(obj, attr))
+    # resolve path command
+    if path is None:
+        if obj is None or attr is None:
+            raise ValueError('must provide atleast a path or object and attribute')
+        cmd = pm.Callback(_show)
+    else:
+        cmd = pm.Callback(show, path)
+    return cmd
+
+
+def show(path):
+    if path is None or not os.path.isdir(path):
+        return
+    if sys.platform == 'win32':
+        subprocess.Popen(['explorer.exe', os.path.normpath(path)])
+    elif sys.platform == 'darwin':
+        subprocess.Popen(['open', path])
+
+
+def getSubDirs(path, excludes=None):
+    if os.path.isdir(path):
+        items = [os.path.join(path, f) for f in os.listdir(path)]
+        dirs = [d for d in items if os.path.isdir(d)]
+        filtered = dirs
+        if excludes is not None:
+            filtered = []
+            for d in dirs:
+                if not any([re.match(f, os.path.basename(d)) for f in excludes]):
+                    filtered.append(d)
+        return sorted(filtered)
+    return []
 
 
