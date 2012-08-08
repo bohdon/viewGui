@@ -730,7 +730,7 @@ class PathButtonForm(object):
     def _browseCommand(self, root, menu):
         relPath = menu.getValue()
         if len(relPath):
-            path = os.path.join(root, relPath)
+            path = os.path.join(root, relPath).replace('\\', '/')
             self._command(path)
 
     def _command(self, path):
@@ -786,7 +786,7 @@ def show(path):
 
 def getSubDirs(path, excludes=None):
     if os.path.isdir(path):
-        items = [os.path.join(path, f) for f in os.listdir(path)]
+        items = [os.path.join(path, f).replace('\\', '/') for f in os.listdir(path)]
         dirs = [d for d in items if os.path.isdir(d)]
         filtered = dirs
         if excludes is not None:
