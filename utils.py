@@ -15,7 +15,7 @@ import subprocess
 import sys
 
 
-SHOW_MSG = 'Show in ' + 'Finder' if sys.platform == 'darwin' else 'Explorer'
+SHOW_MSG = 'Show in ' + ('Finder' if sys.platform == 'darwin' else 'Explorer')
 
 
 def asList(value):
@@ -232,6 +232,9 @@ class GridFormLayout(object):
         self.spacing = spacing
         self.form = pm.formLayout(**kwargs)
 
+    def __str__(self):
+        return str(self.form)
+
     def __enter__(self):
         self.form.__enter__()
         return self
@@ -279,6 +282,9 @@ class ItemList(object):
         self._customEncode = encode
         self.build(**kwargs)
         self.items = items
+
+    def __str__(self):
+        return str(self.control)
 
     @property
     def items(self):
@@ -434,6 +440,9 @@ class ModeForm(object):
         self.build()
         self.modeChangedCommand = modeChangedCommand
 
+    def __str__(self):
+        return str(self.layout)
+
     @property
     def mode(self):
         return self._mode
@@ -480,6 +489,9 @@ class BrowsePathForm(object):
         self.browseOkCaption = 'Choose'
         self.files = files
         self.changeCommand = None
+
+    def __str__(self):
+        return str(self.layout)
 
     @property
     def path(self):
@@ -600,6 +612,9 @@ class PathButtonForm(object):
         self.browseExcludes = ['\..*']
         self.command = command
         self.build()
+
+    def __str__(self):
+        return str(self.layout)
 
     @property
     def rootPath(self):
