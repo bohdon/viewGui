@@ -347,6 +347,8 @@ class ItemList(object):
         val = item
         if self._customEncode is not None:
             val = self._customEncode(item)
+        if val is None:
+            return ''
         return str(val)
 
     def update(self):
