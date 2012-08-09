@@ -723,10 +723,14 @@ class PathButtonForm(object):
         menu.changeCommand(pm.Callback(self._browseCommand, root, menu))
         if current is None:
             pm.menuItem(l='')
+        values = []
         for path in paths:
-            pm.menuItem(l=os.path.basename(path))
+            values.append(os.path.basename(path))
+            pm.menuItem(l=values[-1])
         if current is not None:
-            menu.setValue(os.path.basename(current))
+            curval = os.path.basename(current)
+            if curval in values:
+                menu.setValue(curval)
         return menu
 
     def _browseCommand(self, root, menu):
