@@ -8,12 +8,15 @@ Copyright (c) 2012 Moonbot Studios. All rights reserved.
 """
 
 import pymel.core as pm
+import logging
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 
+LOG = logging.getLogger(__name__)
 
 SHOW_MSG = 'Show in ' + ('Finder' if sys.platform == 'darwin' else 'Explorer')
 
@@ -269,6 +272,9 @@ class GridFormLayout(object):
         pm.formLayout(self.form, e=True, ap=attaches)
 
 
+
+
+
 class ItemList(object):
     """
     ItemList wraps a textScrollList control allowing you to
@@ -427,6 +433,9 @@ class NodeList(ItemList):
             self.selectedCommand(nodes)
 
 
+
+
+
 class ModeForm(object):
     """
     Creates a form with controls that operate under one of a given
@@ -475,6 +484,7 @@ class ModeForm(object):
         self.mode = mode
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
+
 
 
 
@@ -568,6 +578,8 @@ class BrowsePathForm(object):
         if path is not None:
             self.path = path[0]
             self.onChange()
+
+
 
 
 
@@ -802,5 +814,647 @@ def getSubDirs(path, excludes=None):
                     filtered.append(d)
         return sorted(filtered)
     return []
+
+
+def browse(files=True, existing=True, cap='Choose {item}', okc='Choose', dir=None):
+    fm = (1 if existing else 0) if files else 2
+    item = 'File' if files else 'Directory'
+    cap.format(item=item)
+    kw = dict(fm=fm, cap=cap, okc=okc)
+    if dir is not None and os.path.isdir(dir):
+        kw['dir'] = dir
+    result = pm.fileDialog2(**kw)
+    if result is not None and len(result):
+        return result[0]
+
+
+
+
+
+ICON_SIZE = (128, 128)
+
+class LibraryLayout(object):
+    """
+    Create a layout that shows icon items for files
+    within one or more paths.
+    """
+    def __init__(self, itemClasses=None, editable=True):
+        if itemClasses is None:
+            itemClasses = [LibraryIconItem]
+        self.bgc = (0.18, 0.18, 0.18)
+        self.pathbgc = (0.2, 0.2, 0.2)
+        self._editable = editable
+        self._multipleSelection = False
+        self._columns = 6
+        self._itemSize = 75
+        self._dragItem = None
+        self._itemClasses = itemClasses
+        self._items = {}
+        self._paths = []
+        self.build()
+
+    @property
+    def paths(self):
+        return self._paths
+    @paths.setter
+    def paths(self, value):
+        value = asList(value)
+        self._paths = value
+        self.update()
+
+    def setPath(self, value):
+        self.paths = value
+
+    @property
+    def itemClasses(self):
+        return self._itemClasses
+    @itemClasses.setter
+    def itemClasses(self, value):
+        self._itemClasses = [x for x in asList(value) if isinstance(x, LibraryItem)]
+
+    @property
+    def itemSize(self):
+        return self._itemSize
+    @itemSize.setter
+    def itemSize(self, value):
+        self._itemSize = value
+        self.updateItemSizes()
+
+    @property
+    def columns(self):
+        return self._columns
+    @columns.setter
+    def columns(self, value):
+        self._columns = value
+        self.updateLibraryContent()
+
+    @property
+    def multipleSelection(self):
+        return self._multipleSelection
+    @multipleSelection.setter
+    def multipleSelection(self, value):
+        self._multipleSelection = value
+        self.updateItemSelection()
+
+    @property
+    def editable(self):
+        return self._editable
+    @editable.setter
+    def editable(self, value):
+        self._editable = value
+        self.update()
+    
+    def items(self, path=None):
+        """
+        Return the current items for the given path, or
+        as a dictionary with all paths.
+        """
+        if path is not None:
+            if self._items.has_key(path):
+                return self._items[path]
+        else:
+            return self._items.copy()
+
+    def allItems(self):
+        """ Return all items in a flat list """
+        return [v for itms in self.items().values() for v in itms]
+
+    def selectedItem(self, path=None):
+        sel = self.selectedItems(path)
+        if len(sel):
+            return sel[0]
+
+    def selectedItems(self, path=None):
+        items = []
+        if path is not None:
+            if self._items.has_key(path):
+                items = self._items[path]
+        else:
+            items = self.allItems()
+        return [i for i in items if i.selected]
+    
+    def build(self):
+        """ Build the contents of the grid-view containing all animation poses/clips """
+        with pm.scrollLayout(cr=True, bgc=(0.18, 0.18, 0.18)) as self.scrollLayout:
+            with pm.frameLayout(lv=False, bv=False, mw=8, mh=8) as self.contentLayout:
+                self.buildLibraryContent()
+    
+    def buildLibraryContent(self):
+        """ Build a path header and item grid for each of the current item lists """
+        with pm.columnLayout(adj=True, rs=8) as col:
+            for p, itms in self._items.items():
+                self.buildItemLayout(itms, p)
+        return col
+
+    def buildItemLayout(self, items, path=None):
+        rows = []
+        i = 0
+        while i < len(items):
+            end = min(len(items), i+self.columns)
+            rows.append(items[i:end])
+            i = end
+        with pm.frameLayout(lv=False, bv=False) as layout:
+            if path is not None:
+                with pm.frameLayout(lv=False, bs='out'):
+                    kw = dict(h=26, bgc=self.pathbgc)
+                    # TODO: make a path:title map for custom names in path title bars
+                    t = LibraryPathTitle(path, **kw)
+                    t.dropCommand = self.onItemDropped
+            with pm.frameLayout(lv=False, bv=False):
+                for row in rows:
+                    with pm.formLayout() as form:
+                        for item in row:
+                            item.build(editable=self.editable)
+                        layoutForm(form, [0] * len(row), spacing=0)
+        return layout
+        
+    def update(self, path=None):
+        self.updateItems(path)
+        self.updateLibraryContent()
+
+    def updateItemSizes(self):
+        for itms in self.items().values():
+            for i in itms:
+                i.size = self.itemSize
+
+    def updateLibraryContent(self):
+        """ Update the content of the library to reflect the current items. """
+        self.contentLayout.clear()
+        with self.contentLayout:
+            self.buildLibraryContent()
+
+    def updateItems(self, path=None):
+        """
+        Update the current items for all paths or the given path.
+        Will also clear old items that are no longer in one of the current paths.
+        """
+        toupdate = []
+        # determine paths to update
+        if path is not None:
+            if path not in paths:
+                return
+            toupdate = [path]
+        else:
+            toupdate = self.paths
+        # trim old paths
+        for k in self._items.keys():
+            if k not in self.paths:
+                del self._items[k]
+        # update
+        for p in toupdate:
+            items = self.getItemsForPath(p)
+            for i in items:
+                self.setupItem(i)
+            self._items[p] = items
+
+    def updateItemSelection(self, keep=None):
+        """ Update item selection based on the multipleSelection property """
+        keep = asList(keep)
+        if not self.multipleSelection:
+            for i in self.allItems():
+                if i not in keep:
+                    i.deselect()
+
+    def getItemsForPath(self, path):
+        """
+        Return a list of LibraryItems for the given path.
+        Attempts to create an item from each file in the path using with
+        each of the classes from itemClasses. The first item that is
+        created successfully from any of the classes will be used.
+        """
+        # TODO: setup a regex:class map for associating files with item classes
+        # TODO: add a filter regex to skip certain files, eg. .DS_Store, Thumbs.db, .*
+        items = []
+        if os.path.isdir(path):
+            files = [os.path.join(path, f) for f in os.listdir(path)]
+            files = self.sortFiles(files)
+            for f in files:
+                for c in self.itemClasses:
+                    item = c.fromFile(f)
+                    if item is not None:
+                        items.append(item)
+                        break
+        return items
+
+    def sortFiles(self, files):
+        """ Sort the given files. Override to implement custom sorting """
+        return sorted(files)
+
+    def setupItem(self, item):
+        """
+        Tell the LibraryItem to associate itself with this library.
+        """
+        if not isinstance(item, LibraryItem):
+            raise TypeError('expected LibraryItem, got {0}'.format(type(item).__name__))
+        item.setup(self)
+
+    def fitItemSize(self):
+        # subtract scroll bar and margins
+        w = self.scrollLayout.getWidth() - 20
+        margins = (4 * self.columns)
+        newSize = (w - margins) / float(self.columns)
+        self.itemSize = newSize
+
+    def setItemSize(self, value, minValue=50, maxValue=150):
+        self.itemSize = min(max(minValue, value), maxValue)
+
+    def setColumns(self, minValue=1, maxValue=10, **kwargs):
+        kw = dict(
+            t = 'Set Column Count',
+            m = 'Enter the number of columns to use ({0} - {1})'.format(minValue, maxValue),
+            b=['Ok'],
+            tx=self.columns,
+        )
+        kw.update(kwargs)
+        result = pm.promptDialog(**kw)
+        if 'Ok' not in result:
+            return
+        try:
+            val = int(pm.promptDialog(q=True).strip())
+        except:
+            LOG.warning('invalid value, please enter an integer')
+            return
+        if val < minValue or val > maxValue:
+            LOG.warning('invalid value, enter a number from {0} to {1}'.format(minValue, maxValue))
+            return
+        self.columns = val
+
+    def onItemSelect(self, item):
+        self.updateItemSelection(keep=item)
+
+    def onItemRename(self, item):
+        pm.evalDeferred(self.update)
+
+    def onItemDelete(self, item):
+        pm.evalDeferred(self.update)
+
+    def onItemDragged(self, obj, x, y, mods):
+        self._dragItem = obj
+
+    def onItemDropped(self, dragobj, dropobj, msgs, x, y, type):
+        if isinstance(dropobj, LibraryPathTitle):
+            if self._dragItem is not None:
+                path = dropobj.path
+                copy = (type == 1)
+                self._dragItem.moveToPath(path, asCopy=copy)
+        pm.evalDeferred(self.update)
+
+
+
+class LibraryPathTitle(object):
+    """
+    Creates a frame layout with text in it to represent a folder
+    within a LibraryLayout. These objects handle drag and drop as well
+    to provide easy moving of LibraryItem objects.
+    """
+    def __init__(self, path, **kwargs):
+        self._path = path
+        self.build(**kwargs)
+        self.dropCommand = None
+
+    def __str__(self):
+        return str(self.control)
+
+    @property
+    def path(self):
+        if self._path is None:
+            return ''
+        return self._path
+    @path.setter
+    def path(self, value):
+        self._path = value
+        self.update()
+
+    def build(self, **kwargs):
+        self.control = pm.text(l='', dpc=self._dropCommand, **kwargs)
+        buildShowMenu(self.control, self.path)
+        self.update()
+
+    def update(self):
+        self.control.setLabel(os.path.basename(self.path).title())
+
+    def _dropCommand(self, dragged, dropped, msgs, x, y, type):
+        if hasattr(self.dropCommand, '__call__'):
+            self.dropCommand(dragged, self, msgs, x, y, type)
+
+
+
+
+class LibraryItem(object):
+    @classmethod
+    def fromFile(cls, filename):
+        """
+        Return a new LibraryItem from the given filename.
+        This should be overridden to only return an item
+        if the given file is valid
+        """
+        if cls.validate(filename):
+            return cls(filename)
+
+    @classmethod
+    def validate(cls, filename):
+        """
+        Validate that the given filename can be used for this item class.
+        Override this in subclasses to only create items from certain files.
+        """
+        return os.path.isfile(filename)
+
+    def __init__(self, filename=None):
+        self.itemName = 'file'
+        self._filename = filename
+        self._selected = False
+        self.selectCallback = None
+        self.renameCallback = None
+        self.deleteCallback = None
+        self.dragCallback = None
+
+    def __repr__(self):
+        return '<{0.__class__.__name__} | {0.name}>'.format(self)
+
+    @property
+    def filename(self):
+        return self._filename
+    @filename.setter
+    def filename(self, value):
+        self._filename = value
+        self.onFilenameChanged()
+
+    @property
+    def name(self):
+        if self.filename is not None:
+            return self.getName(self.filename)
+
+    def getName(self, filename):
+        """
+        Return a name for the given filename
+        Override to customize how names are determined from the file
+        """
+        return os.path.basename(filename)
+
+    def getFilenameForName(self, name):
+        """
+        Return a file basename for the given name
+        Override to customize how file names are determined from names
+        """
+        return name
+
+    @property
+    def selected(self):
+        return self._selected
+    @selected.setter
+    def selected(self, value):
+        self._selected = value
+        self.onSelectedChanged()
+        if value:
+            self._callback('select')
+
+    def build(self, editable=True):
+        kw = dict(
+            l=self.name,
+            st='textOnly',
+            cc=pm.Callback(self.onSelect),
+            ann=self.filename,
+        )
+        if editable:
+            kw['dgc'] = self._dragCallback
+        self.button = pm.iconTextCheckBox(**kw)
+        if editable:
+            pm.popupMenu(p=self.button)
+            self.buildMenu()
+
+    def buildMenu(self):
+        pm.menuItem(l='Rename', rp='N', c=pm.Callback(self.rename))
+        pm.menuItem(l='Delete', rp='S', c=pm.Callback(self.delete))
+
+    def onFilenameChanged(self):
+        if hasattr(self, 'button'):
+            self.button.setLabel(self.name)
+            self.button.setAnnotation(self.filename)
+
+    def onSelectedChanged(self):
+        self.button.setValue(self.selected)
+
+    def onSelect(self):
+        self.selected = self.button.getValue()
+
+    def setup(self, lib):
+        self.selectCallback = lib.onItemSelect
+        self.renameCallback = lib.onItemRename
+        self.deleteCallback = lib.onItemDelete
+        self.dragCallback = lib.onItemDragged
+
+    def moveToPath(self, path, asCopy=False, force=False):
+        """
+        Move this item to the given folder.
+        Essentially performs a rename while maintaining the files base name.
+        """
+        if self.filename is None:
+            return
+        if not os.path.isdir(path):
+            term = 'copy' if asCopy else 'move'
+            LOG.warning('cannot {1} to missing folder: {0}'.format(path, term))
+            return
+        newFile = os.path.join(path, os.path.basename(self.filename))
+        self.moveFile(newFile, asCopy=asCopy, force=force)
+
+    def rename(self, asCopy=False, force=False, **kwargs):
+        kw = dict(
+            t='Rename {0}'.format(self.itemName.title()),
+            m='Enter a new name for\n{0}'.format(self.filename),
+            b=['Cancel', 'Rename'],
+            db='Rename',
+            tx=self.name,
+        )
+        kw.update(kwargs)
+        result = pm.promptDialog(**kw)
+        if 'Rename' not in result:
+            return
+        # get new filename
+        newName = pm.promptDialog(q=True)
+        if newName == self.name:
+            return
+        newFile = os.path.join(os.path.dirname(self.filename), self.getFilenameForName(newName))
+        # move file
+        self.moveFile(newFile, asCopy=asCopy, force=force)
+
+    def delete(self, force=False, **kwargs):
+        if not force:
+            kw = dict(
+                t='Delete {0}'.format(self.itemName.title()),
+                m='Are you sure you want to delete:\n{0}'.format(self.filename),
+                b=['Cancel', 'Ok'],
+                db='Ok',
+            )
+            kw.update(kwargs)
+            result = pm.confirmDialog(**kw)
+            if 'Ok' not in result:
+                return
+        self.deleteFile()
+
+    def select(self):
+        self.selected = True
+
+    def deselect(self):
+        self.selected = False
+
+    def moveFile(self, filename, asCopy=False, force=False):
+        if not force:
+            # check if destination is available
+            if os.path.isfile(filename):
+                kw = dict(
+                    t='Overwrite {0}'.format(self.itemName.title()),
+                    m='Are you sure you want to overwrite:\n{0}'.format(filename),
+                    b=['Cancel', 'Ok'],
+                    db='Cancel',
+                )
+                result = pm.confirmDialog(**kw)
+                if 'Ok' not in result:
+                    return
+        try:
+            self.performMoveFile(filename, asCopy=asCopy)
+        except Exception as e:
+            LOG.warning('could not rename: {0}'.format(e))
+        else:
+            self._callback('rename')
+
+    def performMoveFile(self, filename, asCopy=False):
+        """
+        Perform the actual copy or move of the current file to the given filename.
+        """
+        if asCopy:
+            shutil.copy2(self.filename, filename)
+        else:
+            shutil.move(self.filename, filename)
+        self.filename = filename
+
+    def deleteFile(self):
+        if os.path.isfile(self.filename):
+            try:
+                os.remove(self.filename)
+            except Exception as e:
+                LOG.warning('could not delete: {0}'.format(e))
+            else:
+                self._callback('delete')
+
+    def _callback(self, name):
+        cmdName = '{0}Callback'.format(name)
+        if hasattr(getattr(self, cmdName), '__call__'):
+            getattr(self, cmdName)(self)
+
+    def _dragCallback(self, ctl, x, y, mods):
+        if hasattr(self.dragCallback, '__call__'):
+            self.dragCallback(self, x, y, mods)
+
+
+
+
+DEFAULT_ICON = 'default.svg'
+
+def getIconFilename(filename):
+    """ Return the name of the png that would be associated with the given file """
+    return '{0}.png'.format(filename)
+
+class LibraryIconItem(LibraryItem):
+    @classmethod
+    def validate(cls, filename):
+        """
+        Icon items automatically associate themselves with a png,
+        so ignore all pngs as they should not be represented individually.
+        """
+        if os.path.splitext(filename)[-1] == '.png':
+            return False
+        return super(LibraryIconItem, cls).validate(filename)
+
+    def __init__(self, filename=None, showLabel=True, size=50, labelHeight=14):
+        super(LibraryIconItem, self).__init__(filename)
+        self._showLabel = showLabel
+        self._size = size
+        self._labelHeight = labelHeight
+        self.defaultIcon = DEFAULT_ICON
+
+    @property
+    def icon(self):
+        if self.iconFilename is not None and os.path.isfile(self.iconFilename):
+            return self.iconFilename
+        return self.defaultIcon
+
+    @property
+    def iconFilename(self):
+        if self.filename is not None:
+            return getIconFilename(self.filename)
+
+    def build(self, editable=True):
+        with pm.formLayout(w=self.size, h=self.size + self.labelHeight) as form:
+            kw = dict(
+                i=self.icon,
+                cc=pm.Callback(self.onSelect),
+                w=self.size, h=self.size,
+                v=self.selected,
+                ann=self.filename,
+            )
+            if editable:
+                kw['dgc'] = self._dragCallback
+            self.button = pm.iconTextCheckBox(**kw)
+            self.label = pm.text(
+                l=self.name,
+                fn='smallPlainLabelFont',
+                h=self.labelHeight,
+                m=self.showLabel,
+            )
+            if editable:
+                pm.popupMenu(p=self.button, mm=True)
+                self.buildMenu()
+            layoutForm(form, (0, 0), vertical=True)
+        self.layout = form
+
+    def setup(self, lib):
+        super(LibraryIconItem, self).setup(lib)
+        self.size = lib.itemSize
+
+    def onFilenameChanged(self):
+        if hasattr(self, 'label'):
+            self.label.setLabel(self.name)
+            self.button.setAnnotation(self.filename)
+
+    def performMoveFile(self, filename, asCopy=False):
+        """ For Icon items, this will also move the icon file if it exists. """
+        fnc = shutil.copy2 if asCopy else shutil.move
+        # move/copy file
+        fnc(self.filename, filename)
+        # move/copy icon
+        if os.path.isfile(self.iconFilename):
+            newIcon = getIconFilename(filename)
+            fnc(self.iconFilename, newIcon)
+        self.filename = filename
+
+    @property
+    def showLabel(self):
+        return self._showLabel
+    @showLabel.setter
+    def showLabel(self, value):
+        self._showLabel = value
+        self.label.setManage(value)
+
+    @property
+    def size(self):
+        return self._size
+    @size.setter
+    def size(self, value):
+        self._size = value
+        if hasattr(self, 'layout'):
+            self.button.setWidth(value)
+            self.button.setHeight(value)
+            self.layout.setWidth(value)
+            self.layout.setHeight(value + self.labelHeight)
+
+    @property
+    def labelHeight(self):
+        return self._labelHeight
+    @labelHeight.setter
+    def labelHeight(self, value):
+        self._labelHeight = int(value)
+
+
+
 
 

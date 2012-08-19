@@ -30,9 +30,12 @@ to all viewGui.View subclasses.
 
 import logging
 import os
+import gui
+import utils
+import view
 from gui import *
-from view import *
 from utils import *
+from view import *
 
 __version__ = '0.5.2'
 gui.VERSION = __version__
