@@ -434,6 +434,120 @@ class NodeList(ItemList):
 
 
 
+class DataLayout(object):
+    """
+    Creates a layout for representing simple data. The data property
+    can be supplied with any dictionary like information and will be used
+    to automatically populate text objects.
+
+    Linewrapping and truncation can be used to organize how the data is displayed.
+    """
+    def __init__(self, data=None, ratio=(1, 3), scroll=False, linewrap=None, truncate=None):
+        self.build()
+        self._ratio = ratio
+        self._scroll = scroll
+        self._linewrap = linewrap
+        self._truncate = truncate
+        self.offset = 2
+        self.data = data
+
+    def __str__(self):
+        return str(self.layout)
+
+    @property
+    def data(self):
+        return self._data
+    @data.setter
+    def data(self, value):
+        self._data = value
+        self.update()
+
+    @property
+    def ratio(self):
+        return self._ratio
+    @ratio.setter
+    def ratio(self, value):
+        self._ratio = value
+        self.update()
+
+    @property
+    def scroll(self):
+        return self._scroll
+    @scroll.setter
+    def scroll(self, value):
+        self._scroll = value
+        self.update()
+
+    @property
+    def linewrap(self):
+        return self._linewrap
+    @linewrap.setter
+    def linewrap(self, value):
+        self._linewrap = value
+        self.update()
+
+    @property
+    def truncate(self):
+        return self._truncate
+    @truncate.setter
+    def truncate(self, value):
+        self._truncate = value
+        self.update()
+
+    def encode(self, value):
+        value = str(value)
+        if self.truncate is not None and len(value) > self.truncate:
+            value = value[:self.truncate] + '...'
+        return value
+
+    def build(self):
+        with pm.formLayout() as self.layout:
+            pass
+
+    def buildContent(self):
+        if self.scroll:
+            with pm.scrollLayout(cr=True, h=10):
+                self.buildDataContent()
+        else:
+            self.buildDataContent()
+
+    def buildDataContent(self):
+        with pm.formLayout() as form:
+            if not hasattr(self.data, 'items'):
+                return
+            last = None
+            for k, v in self.data.items():
+                lbl = pm.text(l=self.encode(k), al='right', en=False)
+                kw = dict(ww=self.linewrap) if self.linewrap is not None else {}
+                val = pm.text(l=self.encode(v), al='left', **kw)
+                layoutFormChildren(form, (lbl, val), self.ratio, fullAttach=False)
+                if last is not None:
+                    attachFormChildren(form, (lbl, val), 'top', offset=self.offset, ctl=last)
+                last = val
+
+    def update(self):
+        self.layout.clear()
+        with self.layout:
+            self.buildContent()
+            layoutForm(self.layout, 1)
+    
+    def buildMetaDataForm(self):
+        with pm.formLayout() as form:
+            lastCtl = None
+            for k, v in self.metaDataItems:
+                label = pm.text(l=k, al='right', en=False)
+                value = pm.text(l=v, al='left')
+                pm.formLayout(form, e=True,
+                    af=[(label, 'left', 0), (value, 'right', 0)],
+                    ap=[(label, 'right', 2, 35), (value, 'left', 2, 35)],
+                )
+                if lastCtl is not None:
+                    pm.formLayout(form, e=True,
+                        ac=[(label, 'top', 4, lastCtl), (value, 'top', 4, lastCtl)],
+                    )
+                lastCtl = value
+        return form
+
 
 
 class ModeForm(object):
