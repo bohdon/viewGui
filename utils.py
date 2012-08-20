@@ -485,7 +485,6 @@ class ModeForm(object):
                 btn = pm.iconTextRadioButton(**kw)
                 self.buttons.append(btn)
             layoutForm(self.layout, ratios, spacing=spacing)
-        self.layout.setWidth(sum([b.getWidth() for b in self.buttons]) + spacing * len(self.modes))
 
     def modeChanged(self, mode):
         self.mode = mode
@@ -838,8 +837,6 @@ def browse(files=True, existing=True, cap='Choose {item}', okc='Choose', dir=Non
 
 
 
-ICON_SIZE = (128, 128)
-
 class LibraryLayout(object):
     """
     Create a layout that shows icon items for files
@@ -858,6 +855,7 @@ class LibraryLayout(object):
         self._itemClasses = itemClasses
         self._items = {}
         self._paths = []
+        self.dialogParent = None
         self.pathFilter = None
         self.itemFilter = None
         self.selectCallback = None
@@ -1202,6 +1200,7 @@ class LibraryItem(object):
         self.itemName = 'file'
         self._filename = filename
         self._selected = False
+        self.dialogParent = None
         self.selectCallback = None
         self.deselectCallback = None
         self.renameCallback = None
@@ -1291,6 +1290,7 @@ class LibraryItem(object):
         self.renameCallback = lib.onItemRename
         self.deleteCallback = lib.onItemDelete
         self.dragCallback = lib.onItemDragged
+        self.dialogParent = lib.dialogParent
 
     def moveToPath(self, path, asCopy=False, force=False):
         """
@@ -1314,6 +1314,8 @@ class LibraryItem(object):
             db='Rename',
             tx=self.name,
         )
+        if self.dialogParent is not None:
+            kw['p'] = self.dialogParent
         kw.update(kwargs)
         result = pm.promptDialog(**kw)
         if 'Rename' not in result:
@@ -1334,6 +1336,8 @@ class LibraryItem(object):
                 b=['Cancel', 'Ok'],
                 db='Ok',
             )
+            if self.dialogParent is not None:
+                kw['p'] = self.dialogParent
             kw.update(kwargs)
             result = pm.confirmDialog(**kw)
             if 'Ok' not in result:
@@ -1356,6 +1360,8 @@ class LibraryItem(object):
                     b=['Cancel', 'Ok'],
                     db='Cancel',
                 )
+                if self.dialogParent is not None:
+                    kw['p'] = self.dialogParent
                 result = pm.confirmDialog(**kw)
                 if 'Ok' not in result:
                     return
