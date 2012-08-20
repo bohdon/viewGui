@@ -1408,6 +1408,28 @@ class LibraryItem(object):
 
 DEFAULT_ICON = 'default.svg'
 
+def renderIcon(filename, w=256, h=256, **kwargs):
+    """
+    Hardware render an icon to the given filename.
+    Pass a value for `cam` to use a specific camera.
+    """
+    # change render file type
+    rg = pm.PyNode('defaultRenderGlobals')
+    origFmt = rg.imageFormat.get()
+    # 32 = png
+    rg.imageFormat.set(32)
+    kw = dict(w=w, h=h, eaa=(2, 16))
+    kw.update(kwargs)
+    try:
+        tmp = pm.hwRender(**kw)
+        shutil.move(tmp, filename)
+    except:
+        import traceback
+        traceback.print_exc()
+    finally:
+        # restore file type
+        rg.imageFormat.set(origFmt)
+
 def getIconFilename(filename):
     """ Return the name of the png that would be associated with the given file """
     return '{0}.png'.format(filename)
@@ -1522,8 +1544,6 @@ class LibraryIconItem(LibraryItem):
     @labelHeight.setter
     def labelHeight(self, value):
         self._labelHeight = int(value)
-
-
 
 
 

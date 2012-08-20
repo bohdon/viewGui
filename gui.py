@@ -13,13 +13,14 @@ import view
 
 __all__ = [
     'Gui',
+    'ViewGui',
+    'IconCaptureGui',
 ]
 
 LOG = logging.getLogger(__name__)
 VERSION = '0.0'
 DEFAULT_SIZE = (200, 200)
 DEFAULT_TLC = (200, 200)
-
 
 class Gui(object):
     """
@@ -274,6 +275,15 @@ class Gui(object):
                     h = self._win.getHeight()
                 )
             v.hide()
+
+ViewGui = Gui
+
+
+def IconCaptureGui(name='viewGuiIconCaptureWin', title='Capture Icon', size=(128, 128)):
+    g = ViewGui(title, name, [view.IconCaptureView], w=100, h=100)
+    g.iconSize = size
+    g.create()
+    return g.curView
 
 
 

@@ -7,12 +7,14 @@ Created by Bohdon Sayre on 2010-01-01.
 Copyright (c) 2012 Bohdon Sayre. All rights reserved.
 """
 
-
-from pymel.core import *
+import pymel.core as pm
 import logging
+import os
+import utils
 
 __all__ = [
     'View',
+    'IconCaptureView',
 ]
 
 class View(object):
@@ -81,7 +83,7 @@ class View(object):
     def create(self):
         self.log.debug('building')
         with self._parent:
-            with formLayout() as self._layout:
+            with pm.formLayout() as self._layout:
                 self.build()
         self.hide()
     
@@ -101,14 +103,11 @@ class View(object):
 
     def build(self):
         """ Build the main header and body for this view. """
-        with frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bv=False) as self._headFrame:
+        with pm.frameLayout('%sHeadFrame' % self.viewName, mw=self._headMargins[0], mh=self._headMargins[1], lv=False, bv=False) as self._headFrame:
             self.buildHeader()
-        with frameLayout('%sFrame' % self.viewName, mw=self._bodyMargins[0], mh=self._bodyMargins[1], lv=False, bv=False) as self._bodyFrame:
+        with pm.frameLayout('%sFrame' % self.viewName, mw=self._bodyMargins[0], mh=self._bodyMargins[1], lv=False, bv=False) as self._bodyFrame:
             self.buildBody()
-        formLayout(self._layout, e=True,
-            af=[(self._headFrame, 'top', 0), (self._headFrame, 'left', 0), (self._headFrame, 'right', 0),
-                (self._bodyFrame, 'left', 0), (self._bodyFrame, 'right', 0), (self._bodyFrame, 'bottom', 0)],
-            ac=[(self._bodyFrame, 'top', 2, self._headFrame)])
+        utils.layoutForm(self._layout, (0, 1), spacing=2, vertical=True)
     
     def buildHeader(self):
         """
@@ -119,8 +118,8 @@ class View(object):
         """
         links = self.links()
         if links != []:
-            with frameLayout(lv=False, bs='out'):
-                with formLayout('{0}LinkForm'.format(self.viewName), bgc=self._linkBgc) as form:
+            with pm.frameLayout(lv=False, bs='out'):
+                with pm.formLayout('{0}LinkForm'.format(self.viewName), bgc=self._linkBgc) as form:
                     last = None
                     for viewName in links:
                         name = None
@@ -128,13 +127,13 @@ class View(object):
                             name = self.gui.getViewClass(viewName).displayName
                         if name is None:
                             name = viewName
-                        btn = button(l=name, c=Callback(self.showView, viewName), h=18)
+                        btn = pm.button(l=name, c=pm.Callback(self.showView, viewName), h=18)
                         if viewName == self.viewName:
                             btn.setBackgroundColor([.86, .86, .86])
                         if last is None:
-                            formLayout(form, e=True, af=[(btn, 'left', 0)])
+                            pm.formLayout(form, e=True, af=[(btn, 'left', 0)])
                         else:
-                            formLayout(form, e=True, ac=[(btn, 'left', 2, last)])
+                            pm.formLayout(form, e=True, ac=[(btn, 'left', 2, last)])
                         last = btn
         self._headFrame.setManage(len(links) > 0)
 
@@ -158,29 +157,146 @@ class View(object):
     def viewItem(self, viewName, l=None, ann='', bgc=[.25, .25, .25], en=True):
         """Create a button used to link to another view"""
         if l is None: l = viewName
-        btn = button(l=l, c=Callback(self.showView, viewName), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
+        btn = pm.button(l=l, c=pm.Callback(self.showView, viewName), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
         return btn
     
     def frameItem(self, l='', c=None, ann='', bgc=None, en=True, mw=4, mh=4, bs='etchedIn'):
         """Create a small frame with no label and a button with a description"""
-        with frameLayout(lv=False, mw=mw, mh=mh, bs=bs) as frame:
-            with formLayout(en=en) as form:
-                btn = button(l=l, c=c, ann=ann, w=self._frameItemWidth)
+        with pm.frameLayout(lv=False, mw=mw, mh=mh, bs=bs) as frame:
+            with pm.formLayout(en=en) as form:
+                btn = pm.button(l=l, c=c, ann=ann, w=self._frameItemWidth)
                 if bgc != None: btn.setBackgroundColor(bgc)
                 if c != None: btn.setCommand(c)
-                txt = text(l=ann, al='center')
-            formLayout(form, e=True, af=[(btn, 'top', 0), (btn, 'left', 0), (btn, 'right', 0), (txt, 'left', 0), (txt, 'right', 0), (txt, 'bottom', 0)], ac=[(txt, 'top', 4, btn)])
+                txt = pm.text(l=ann, al='center')
+            utils.layoutForm(form, (0, 1), vertical=True)
         return frame, form, btn, txt
     
     def iconItem(self, l='', i=None, c=None, ann=None, bgc=None, en=True, mw=2, mh=2, bs='etchedIn', st='iconAndTextHorizontal'):
         """Create an icon button with a frame layout"""
-        with frameLayout(lv=False, mw=mw, mh=mh, bs=bs) as frame:
-            btn = iconTextButton(l=l, st=st, en=en)
+        with pm.frameLayout(lv=False, mw=mw, mh=mh, bs=bs) as frame:
+            btn = pm.iconTextButton(l=l, st=st, en=en)
             if bgc != None: btn.setBackgroundColor(bgc)
             if c != None: btn.setCommand(c)
             if i != None: btn.setImage(i)
             if ann != None: btn.setAnnotation(ann)
         return frame, btn
+
+
+
+
+class IconCaptureView(View):
+    @property
+    def iconSize(self):
+        return self._iconSize
+    @iconSize.setter
+    def iconSize(self, value):
+        self._iconSize = value
+        self.updateEditorFrame()
+
+    def buildBody(self):
+        self._iconSize = self.gui.iconSize
+        self.minSize = 128
+        self.maxSize = 512
+        self.tempFileName = 'mayaIcon{0}.png'
+        self.gui.window.setToolbox(True)
+        self.camera = self.newCamera()
+        with pm.formLayout() as form:
+            with pm.columnLayout():
+                kw = dict(w=128, h=128)
+                with pm.frameLayout(lv=False, bv=False, **kw) as self.editorFrame:
+                    self.panel = pm.modelPanel(cam=self.camera, mbv=False, l='Icon Capture View')
+                    self.setupModelEditor(self.panel.getModelEditor())
+                    bar = self.panel.getBarLayout()
+                    pm.layout(bar, e=True, m=False)
+            with pm.formLayout() as form2:
+                self.buildFooter()
+                utils.layoutForm(form2, 1)
+            utils.layoutForm(form, (0, 1), vertical=True)
+        self.updateEditorFrame()
+        pm.refresh()
+
+    def buildFooter(self):
+        """ Override to build custom footer content for capturing icons """
+        pm.button(l='Choose', c=pm.Callback(self.captureIcon))
+
+    def updateEditorFrame(self):
+        bigger = max(*self.iconSize)
+        fit = min(max(self.minSize, bigger * 2), self.maxSize)
+        scale = fit / float(bigger)
+        size = [s * scale for s in self.iconSize]
+        self.gui.window.setWidth(size[0])
+        self.gui.window.setHeight(size[1])
+        self.editorFrame.setWidth(size[0])
+        self.editorFrame.setHeight(size[1])
+
+    def newCamera(self):
+        sel = pm.selected()
+        c = pm.camera(n='iconCaptureCamera')[0]
+        pm.viewSet(c, home=True)
+        c.focalLength.set(150)
+        pm.select(sel)
+        pm.viewSet(c, fit=True)
+        return c
+
+    def setupModelEditor(self, me):
+        """
+        Setup the view style of the model editor, sometimes the model editor cant
+        be found for some reason so we just have to accept it if we cant adjust it.
+        """
+        if me is None:
+            return
+        me = pm.ui.ModelEditor(me.split('|')[-1])
+        try:
+            pm.modelEditor(me, e=True, da='smoothShaded', dtx=True, allObjects=False, sel=False)
+            pm.modelEditor(me, e=True, manipulators=False, grid=False, hud=False)
+            pm.modelEditor(me, e=True, polymeshes=True, subdivSurfaces=True, nurbsSurfaces=True)
+        except:
+            pass
+
+    def onWindowClosed(self):
+        if pm.modelPanel(self.panel, q=True, ex=True):
+            pm.deleteUI(self.panel, pnl=True)
+        if self.camera.exists():
+            pm.delete(self.camera)
+
+    def captureIcon(self, filename=None, close=True):
+        """
+        Save an image with the current camera to the given filename.
+        If no filename is given the image will be saved in a temp directory.
+        Returns the path to the rendered image.
+        """
+        if filename is None:
+            filename = self.getTempFile()
+            if filename is None:
+                self.log.warning('could not get a temporary file')
+                return
+        # check directory
+        dir_ = os.path.dirname(filename)
+        if not os.path.isdir(dir_):
+            self.log.warning('cannot save image to missing directory: {0}'.format(dir_))
+            return
+        # render image
+        self.renderIcon(filename)
+        if close:
+            self.closeWindow()
+        return filename
+
+    def renderIcon(self, filename):
+        kw = dict(w=self.iconSize[0], h=self.iconSize[1], cam=self.panel.getCamera())
+        utils.renderIcon(filename, **kw)
+        self.log.info(filename)
+
+    def getTempFile(self):
+        import tempfile
+        dir = tempfile.gettempdir()
+        for i in range(1000):
+            f = os.path.join(dir, self.tempFileName.format(i))
+            if not os.path.isfile(f):
+                return f
+
+    def closeWindow(self):
+        if pm.window(self.gui.window, ex=True):
+            pm.deleteUI(self.gui.window)
 
 
 
