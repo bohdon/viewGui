@@ -445,10 +445,12 @@ class ModeForm(object):
     Set the `modeChangedCommand` property to get callbacks when
     the mode is changed in the ui.
     """
-    def __init__(self, modes, annotations=None, modeChangedCommand=None):
+    def __init__(self, modes, annotations=None, modeChangedCommand=None, **kwargs):
+        self._mode = 0
         self.modes = pm.util.enum.Enum(self.__class__.__name__, modes)
         self.annotations = annotations
-        self.build()
+        self.buttons = []
+        self.build(**kwargs)
         self.modeChangedCommand = modeChangedCommand
 
     def __str__(self):
@@ -464,7 +466,8 @@ class ModeForm(object):
         items = self.rdc.getCollectionItemArray()
         pm.ui.PyUI(items[int(m)]).setSelect(True)
 
-    def build(self, ratios=None):
+    def build(self, ratios=None, spacing=0, **kwargs):
+        self.buttons = []
         if ratios is None:
             ratios = [1] * len(self.modes)
         with pm.formLayout() as self.layout:
@@ -473,12 +476,16 @@ class ModeForm(object):
                 kw = dict(
                     l=m.key.title(),
                     st='textOnly',
-                    onc=pm.Callback(self.modeChanged, m)
+                    onc=pm.Callback(self.modeChanged, m),
+                    sl=(i == self.mode),
                 )
                 if self.annotations is not None and len(self.annotations) > i:
                     kw['ann'] = self.annotations[i]
-                pm.iconTextRadioButton(**kw)
-            layoutForm(self.layout, ratios)
+                kw.update(kwargs)
+                btn = pm.iconTextRadioButton(**kw)
+                self.buttons.append(btn)
+            layoutForm(self.layout, ratios, spacing=spacing)
+        self.layout.setWidth(sum([b.getWidth() for b in self.buttons]) + spacing * len(self.modes))
 
     def modeChanged(self, mode):
         self.mode = mode
@@ -851,7 +858,16 @@ class LibraryLayout(object):
         self._itemClasses = itemClasses
         self._items = {}
         self._paths = []
+        self.pathFilter = None
+        self.itemFilter = None
+        self.selectCallback = None
+        self.deselectCallback = None
+        self.renameCallback = None
+        self.deleteCallback = None
         self.build()
+
+    def __str__(self):
+        return str(self.layout)
 
     @property
     def paths(self):
@@ -859,8 +875,9 @@ class LibraryLayout(object):
     @paths.setter
     def paths(self, value):
         value = asList(value)
-        self._paths = value
-        self.update()
+        if self._paths != value:
+            self._paths = value
+            self.update()
 
     def setPath(self, value):
         self.paths = value
@@ -871,6 +888,7 @@ class LibraryLayout(object):
     @itemClasses.setter
     def itemClasses(self, value):
         self._itemClasses = [x for x in asList(value) if isinstance(x, LibraryItem)]
+        self.update()
 
     @property
     def itemSize(self):
@@ -886,7 +904,7 @@ class LibraryLayout(object):
     @columns.setter
     def columns(self, value):
         self._columns = value
-        self.updateLibraryContent()
+        self.updateContent()
 
     @property
     def multipleSelection(self):
@@ -935,15 +953,23 @@ class LibraryLayout(object):
     
     def build(self):
         """ Build the contents of the grid-view containing all animation poses/clips """
-        with pm.scrollLayout(cr=True, bgc=(0.18, 0.18, 0.18)) as self.scrollLayout:
-            with pm.frameLayout(lv=False, bv=False, mw=8, mh=8) as self.contentLayout:
+        with pm.scrollLayout('libraryLayout', cr=True, bgc=(0.18, 0.18, 0.18)) as self.scrollLayout:
+            with pm.frameLayout('libraryFrame', lv=False, bv=False, mw=8, mh=8) as self.contentLayout:
                 self.buildLibraryContent()
+        self.layout = self.scrollLayout
     
     def buildLibraryContent(self):
         """ Build a path header and item grid for each of the current item lists """
         with pm.columnLayout(adj=True, rs=8) as col:
-            for p, itms in self._items.items():
-                self.buildItemLayout(itms, p)
+            for p in self.paths:
+                if self.pathFilter is not None:
+                    if not self.pathFilter(p):
+                        continue
+                if self._items.has_key(p):
+                    itms = self._items[p]
+                    if self.itemFilter is not None:
+                        itms = [i for i in itms if self.itemFilter(i)]
+                    self.buildItemLayout(itms, p)
         return col
 
     def buildItemLayout(self, items, path=None):
@@ -969,17 +995,20 @@ class LibraryLayout(object):
         return layout
         
     def update(self, path=None):
+        """ Update the library to reflect the current paths and their items """
         self.updateItems(path)
-        self.updateLibraryContent()
+        self.updateContent()
 
     def updateItemSizes(self):
         for itms in self.items().values():
             for i in itms:
                 i.size = self.itemSize
 
-    def updateLibraryContent(self):
-        """ Update the content of the library to reflect the current items. """
+    def updateContent(self):
+        """ Update the content of the library to reflect the current items and filters """
         self.contentLayout.clear()
+        for i in self.allItems():
+            i.clearBuild()
         with self.contentLayout:
             self.buildLibraryContent()
 
@@ -1081,11 +1110,21 @@ class LibraryLayout(object):
 
     def onItemSelect(self, item):
         self.updateItemSelection(keep=item)
+        if self.selectCallback is not None:
+            self.selectCallback(item)
+
+    def onItemDeselect(self, item):
+        if self.selectCallback is not None:
+            self.selectCallback(item)        
 
     def onItemRename(self, item):
+        if self.renameCallback is not None:
+            self.renameCallback(item)
         pm.evalDeferred(self.update)
 
     def onItemDelete(self, item):
+        if self.deleteCallback is not None:
+            self.deleteCallback(item)
         pm.evalDeferred(self.update)
 
     def onItemDragged(self, obj, x, y, mods):
@@ -1164,12 +1203,18 @@ class LibraryItem(object):
         self._filename = filename
         self._selected = False
         self.selectCallback = None
+        self.deselectCallback = None
         self.renameCallback = None
         self.deleteCallback = None
         self.dragCallback = None
+        self.clearBuild()
 
     def __repr__(self):
         return '<{0.__class__.__name__} | {0.name}>'.format(self)
+
+    def clearBuild(self):
+        """ Clear all stored ui items """
+        self.button = None
 
     @property
     def filename(self):
@@ -1205,14 +1250,12 @@ class LibraryItem(object):
     def selected(self, value):
         self._selected = value
         self.onSelectedChanged()
-        if value:
-            self._callback('select')
 
     def build(self, editable=True):
         kw = dict(
             l=self.name,
             st='textOnly',
-            cc=pm.Callback(self.onSelect),
+            cc=pm.Callback(self.onClick),
             ann=self.filename,
         )
         if editable:
@@ -1227,18 +1270,24 @@ class LibraryItem(object):
         pm.menuItem(l='Delete', rp='S', c=pm.Callback(self.delete))
 
     def onFilenameChanged(self):
-        if hasattr(self, 'button'):
+        if self.button is not None:
             self.button.setLabel(self.name)
             self.button.setAnnotation(self.filename)
 
     def onSelectedChanged(self):
-        self.button.setValue(self.selected)
+        if self.button is not None:
+            self.button.setValue(self.selected)
 
-    def onSelect(self):
+    def onClick(self):
         self.selected = self.button.getValue()
+        if self.selected:
+            self._callback('select')
+        else:
+            self._callback('deselect')
 
     def setup(self, lib):
         self.selectCallback = lib.onItemSelect
+        self.deselectCallback = lib.onItemDeselect
         self.renameCallback = lib.onItemRename
         self.deleteCallback = lib.onItemDelete
         self.dragCallback = lib.onItemDragged
@@ -1330,11 +1379,14 @@ class LibraryItem(object):
     def deleteFile(self):
         if os.path.isfile(self.filename):
             try:
-                os.remove(self.filename)
+                self.performDeleteFile()
             except Exception as e:
                 LOG.warning('could not delete: {0}'.format(e))
             else:
                 self._callback('delete')
+
+    def performDeleteFile(self):
+        os.remove(self.filename)
 
     def _callback(self, name):
         cmdName = '{0}Callback'.format(name)
@@ -1372,6 +1424,11 @@ class LibraryIconItem(LibraryItem):
         self._labelHeight = labelHeight
         self.defaultIcon = DEFAULT_ICON
 
+    def clearBuild(self):
+        self.button = None
+        self.label = None
+        self.layout = None
+
     @property
     def icon(self):
         if self.iconFilename is not None and os.path.isfile(self.iconFilename):
@@ -1387,7 +1444,7 @@ class LibraryIconItem(LibraryItem):
         with pm.formLayout(w=self.size, h=self.size + self.labelHeight) as form:
             kw = dict(
                 i=self.icon,
-                cc=pm.Callback(self.onSelect),
+                cc=pm.Callback(self.onClick),
                 w=self.size, h=self.size,
                 v=self.selected,
                 ann=self.filename,
@@ -1412,7 +1469,7 @@ class LibraryIconItem(LibraryItem):
         self.size = lib.itemSize
 
     def onFilenameChanged(self):
-        if hasattr(self, 'label'):
+        if self.label is not None:
             self.label.setLabel(self.name)
             self.button.setAnnotation(self.filename)
 
@@ -1426,6 +1483,12 @@ class LibraryIconItem(LibraryItem):
             newIcon = getIconFilename(filename)
             fnc(self.iconFilename, newIcon)
         self.filename = filename
+
+    def performDeleteFile(self):
+        icon = self.iconFilename
+        os.remove(self.filename)
+        if os.path.isfile(icon):
+            os.remove(icon)
 
     @property
     def showLabel(self):
@@ -1441,7 +1504,7 @@ class LibraryIconItem(LibraryItem):
     @size.setter
     def size(self, value):
         self._size = value
-        if hasattr(self, 'layout'):
+        if self.layout is not None:
             self.button.setWidth(value)
             self.button.setHeight(value)
             self.layout.setWidth(value)
