@@ -279,8 +279,10 @@ class Gui(object):
 ViewGui = Gui
 
 
-def IconCaptureGui(name='viewGuiIconCaptureWin', title='Capture Icon', size=(128, 128)):
-    g = ViewGui(title, name, [view.IconCaptureView], w=100, h=100)
+def IconCaptureGui(name='viewGuiIconCaptureWin', title='Capture Icon', size=(128, 128), cls=None):
+    if cls is None:
+        cls = view.IconCaptureView
+    g = ViewGui(title, name, [cls], w=100, h=100)
     g.iconSize = size
     g.create()
     return g.curView
