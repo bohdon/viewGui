@@ -577,10 +577,10 @@ class ModeForm(object):
         return self._mode
     @mode.setter
     def mode(self, value):
-        m = self.modes[self.modes.getIndex(value)]
-        self._mode = m
-        items = self.rdc.getCollectionItemArray()
-        pm.ui.PyUI(items[int(m)]).setSelect(True)
+        if value is not None:
+            value = self.modes[self.modes.getIndex(value)]
+        self._mode = value
+        self.updateSelected()
 
     @property
     def encode(self):
@@ -596,33 +596,57 @@ class ModeForm(object):
         if ratios is None:
             ratios = [1] * len(self.modes)
         with pm.formLayout() as self.layout:
-            self.rdc = pm.iconTextRadioCollection(p=self.layout)
             for i, m in enumerate(self.modes):
-                label = self._encode(m.key.title())
+                label = self._encode(m.key)
                 self.encodeData[str(label)] = m.key.title()
                 kw = dict(
                     l=label,
                     st='textOnly',
                     onc=pm.Callback(self.modeChanged, m),
-                    sl=(i == self.mode),
+                    ofc=pm.Callback(self.modeChanged),
                 )
                 if self.annotations is not None and len(self.annotations) > i:
                     kw['ann'] = self.annotations[i]
                 kw.update(kwargs)
-                btn = pm.iconTextRadioButton(**kw)
+                btn = pm.iconTextCheckBox(**kw)
                 self.buttons.append(btn)
             layoutForm(self.layout, ratios, spacing=spacing)
 
+    def _defaultEncode(self, value):
+        return value.title()
+
     def _encode(self, item):
         val = item
-        if self._customEncode is not None:
+        if hasattr(self._customEncode, '__call__'):
             val = self._customEncode(item)
+        else:
+            val = self._defaultEncode(item)
         if val is None:
             return ''
         return str(val)
 
-    def modeChanged(self, label):
-        self.mode = label
+    def updateSelected(self):
+        """
+        Update the selected items to reflect the current mode(s)
+        """
+        for i, b in enumerate(self.buttons):
+            en = i in asList(self.mode)
+            b.setValue(en)
+
+    def updateLabels(self):
+        for button in self.buttons:
+            currLabel = button.getLabel()
+            mode = self.encodeData[currLabel]
+            newLabel = self._encode(mode)
+            del self.encodeData[currLabel]
+            self.encodeData[newLabel] = mode
+            button.setLabel(newLabel)
+
+    def modeChanged(self, mode=None):
+        #if mode is none and radioMode = true, dont change mode
+        self.mode = mode
+        self.updateSelected()
+        print mode
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
 
