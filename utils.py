@@ -646,7 +646,6 @@ class ModeForm(object):
         #if mode is none and radioMode = true, dont change mode
         self.mode = mode
         self.updateSelected()
-        print mode
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
 
