@@ -559,11 +559,13 @@ class ModeForm(object):
     Set the `modeChangedCommand` property to get callbacks when
     the mode is changed in the ui.
     """
-    def __init__(self, modes, annotations=None, modeChangedCommand=None, **kwargs):
+    def __init__(self, modes, annotations=None, modeChangedCommand=None, encode=None, **kwargs):
         self._mode = 0
         self.modes = pm.util.enum.Enum(self.__class__.__name__, modes)
         self.annotations = annotations
         self.buttons = []
+        self.encodeData = {}
+        self._customEncode = encode
         self.build(**kwargs)
         self.modeChangedCommand = modeChangedCommand
 
@@ -580,6 +582,15 @@ class ModeForm(object):
         items = self.rdc.getCollectionItemArray()
         pm.ui.PyUI(items[int(m)]).setSelect(True)
 
+    @property
+    def encode(self):
+        return self._customEncode
+    @encode.setter
+    def encode(self, value):
+        if hasattr(value, '__call__') or value is None:
+            self._customEncode = value
+            self.update()
+
     def build(self, ratios=None, spacing=0, **kwargs):
         self.buttons = []
         if ratios is None:
@@ -587,8 +598,10 @@ class ModeForm(object):
         with pm.formLayout() as self.layout:
             self.rdc = pm.iconTextRadioCollection(p=self.layout)
             for i, m in enumerate(self.modes):
+                label = self._encode(m.key.title())
+                self.encodeData[str(label)] = m.key.title()
                 kw = dict(
-                    l=m.key.title(),
+                    l=label,
                     st='textOnly',
                     onc=pm.Callback(self.modeChanged, m),
                     sl=(i == self.mode),
@@ -600,11 +613,18 @@ class ModeForm(object):
                 self.buttons.append(btn)
             layoutForm(self.layout, ratios, spacing=spacing)
 
-    def modeChanged(self, mode):
-        self.mode = mode
+    def _encode(self, item):
+        val = item
+        if self._customEncode is not None:
+            val = self._customEncode(item)
+        if val is None:
+            return ''
+        return str(val)
+
+    def modeChanged(self, label):
+        self.mode = label
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
-
 
 
 
