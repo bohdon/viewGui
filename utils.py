@@ -64,9 +64,6 @@ def title(bs='out', *args, **kwargs):
 
 
 
-ONELINE_COMPOUNDS = ['float3', 'double3']
-
-
 def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}):
     autoKwargs = locals()
     del autoKwargs['attr']
@@ -74,7 +71,7 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}):
     if attr.isMulti():
         return MultiAttrLayout(attr, autoKwargs=autoKwargs, **multiKwargs)
     # compound
-    if attr.isCompound() and attr.type() not in ONELINE_COMPOUNDS:
+    if attr.isCompound() and attr.type() not in CompoundAttrLayout.compoundTypes:
         return CompoundAttrLayout(attr, autoKwargs=autoKwargs, **compoundKwargs)
     # normal attribute
     return attrControl(attr, **attrKwargs)
@@ -124,8 +121,9 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
     return ctl
 
 
-
 class CompoundAttrLayout(object):
+    compoundTypes = ['float2', 'float3', 'double2', 'double3', 'long2', 'long3', 'short2', 'short3']
+
     def __init__(self, attr, autoKwargs={}, w=300, **kwargs):
         if not attr.isCompound():
             raise ValueError('{0} is not a compound attribute'.format(attr))
@@ -144,7 +142,7 @@ class CompoundAttrLayout(object):
 
     def buildContent(self):
         with pm.columnLayout(adj=True, rs=2):
-            for a in attr.children():
+            for a in self.attr.children():
                 autoAttrControl(a, **self.autoKwargs)
 
     def update(self):
@@ -175,6 +173,15 @@ def addMultiItem(attr, insert=False):
     attr[index].get()
     return attr[index]
 
+def removeMultiItem(attr, index):
+    """
+    Remove the given index from the given multi attribute.
+    This will not work if an attrControl exists for the attribute.
+    """
+    if not attr.isMulti():
+        raise ValueError('{0} is not a multi attribute'.format(attr))
+    pm.removeMultiInstance(attr[index], b=True)
+
 
 class MultiAttrLayout(object):
     def __init__(self, attr, autoKwargs={}, w=300, **kwargs):
@@ -194,10 +201,16 @@ class MultiAttrLayout(object):
             self.buildContent()
 
     def buildContent(self):
-        with pm.columnLayout(adj=True, rs=2):
+        with pm.columnLayout(adj=True, rs=2) as self.column:
             pm.button(l='Add Item', c=pm.Callback(self.addItem))
             for i in self.attr.getArrayIndices():
-                autoAttrControl(self.attr[i], **self.autoKwargs)
+                self.buildItem(i)
+
+    def buildItem(self, index):
+        with pm.formLayout() as form:
+            autoAttrControl(self.attr[index], **self.autoKwargs)
+            pm.iconTextButton(i='removeRenderable.png', st='iconOnly', c=pm.Callback(self.removeItem, index, form))
+            layoutForm(form, (1, 0))
 
     def update(self):
         self.layout.clear()
@@ -205,12 +218,13 @@ class MultiAttrLayout(object):
             self.buildContent()
 
     def addItem(self):
-        addMultiItem(self.attr)
-        pm.evalDeferred(self.update)
+        new = addMultiItem(self.attr)
+        with self.column:
+            self.buildItem(new.index())
 
-    def removeItem(self, index):
+    def removeItem(self, index, form):
+        pm.deleteUI(form)
         removeMultiItem(self.attr, index)
-        pm.evalDeferred(self.update)
 
 
 
