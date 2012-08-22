@@ -381,8 +381,6 @@ class GridFormLayout(object):
 
 
 
-
-
 class ItemList(object):
     """
     ItemList wraps a textScrollList control allowing you to
@@ -473,6 +471,114 @@ class ItemList(object):
             # format encoded name
             n = self.format.format(index=i+1, name=n)
             self.control.append(n)
+
+
+
+class FilterList(ItemList):
+    """
+    FilterList provides an easy way to create a collection of textScrollLists
+    whos contents represent parent-child relationships. A FilterList's selection
+    will determine the contents of it's child FilterList, if any. FilterLists
+    can be chained together to form any number of list collections.
+    """
+    def __init__(self, parent=None, child=None, items={}, *args, **kwargs):
+        self.allItems = items
+        self._searchFilter = None
+        if kwargs.has_key('searchFilter'):
+            self._searchFilter = kwargs['searchFilter']
+            del kwargs['searchFilter']
+        items = None
+        self.parent = parent
+        self.child = child
+        self._findOverride = False
+        self.selectCommand = None
+        self.doubleClickCommand = None
+        kwargs['selectCommand'] = pm.Callback(self._selectCommand)
+        kwargs['doubleClickCommand'] = pm.Callback(self._doubleClickCommand)
+        super(FilterList, self).__init__(*args, **kwargs)
+
+    @property
+    def searchFilter(self):
+        return self._searchFilter
+    @searchFilter.setter
+    def searchFilter(self, value):
+        self._searchFilter = value
+        self.update()
+
+    def update(self):
+        # maintain the current selection
+        sel = self.selectedNames
+        self._items = self._getFilteredItems()
+        super(FilterList, self).update()
+        if isinstance(self.child, FilterList):
+            self.child.update()
+        # Reapply the selection
+        # self.selectedNames(sel) #TODO
+
+    def _filterDict(self, dictionary, keys=None):
+        '''
+        Filter the items from the supplied dictionary
+        based on the supplied keys (Top-Level Only)
+        '''
+        result = {}
+        for k, v in dictionary.items():
+            v = self._validate(v)
+            add = False
+            if keys:
+                if k in keys:
+                    add = True
+            else:
+                add = True
+            if add:
+                if not result.has_key(k):
+                    result[k] = []
+                result[k].extend(v)
+        return result
+
+    def _getFilteredItems(self):
+        ''' Filter the supplied items '''
+        parentSel = None
+        if isinstance(self.parent, FilterList):
+            parentSel = self.parent.selected
+        # compile the items based on the parent
+        items = self._filterDict(self.allItems, parentSel)
+        
+        result = []
+        allValues = []
+        for item in items.values():
+            allValues.extend(item)
+        if self._searchFilter and self.child is None:
+            for item in allValues:
+                if self._searchFilter in item:
+                    result.append(item)
+        else:
+            result.extend(allValues)
+        result.sort()
+
+        return result
+
+    def _validate(self, value):
+        ''' Validate the given value from self.data '''
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            value = [value]
+        # ensure value items are strings
+        value = [str(x) for x in value]
+        return value
+
+    def _selectCommand(self):
+        if self.selectCommand is not None:
+            self.selectCommand()
+        if isinstance(self.child, FilterList):
+            self.child.update()
+
+    def _doubleClickCommand(self):
+        if self.doubleClickCommand is not None:
+            self._doubleClickCommand()
+        if isinstance(self.child, FilterList):
+            self.child.update()
+
 
 
 class ManageableList(ItemList):
@@ -667,13 +773,14 @@ class ModeForm(object):
     Set the `modeChangedCommand` property to get callbacks when
     the mode is changed in the ui.
     """
-    def __init__(self, modes, annotations=None, modeChangedCommand=None, encode=None, **kwargs):
-        self._mode = 0
+    def __init__(self, modes, annotations=None, modeChangedCommand=None, encode=None, multiple=False, **kwargs):
+        self._mode = []
         self.modes = pm.util.enum.Enum(self.__class__.__name__, modes)
         self.annotations = annotations
         self.buttons = []
         self.encodeData = {}
         self._customEncode = encode
+        self.multiple = multiple
         self.build(**kwargs)
         self.modeChangedCommand = modeChangedCommand
 
@@ -685,9 +792,19 @@ class ModeForm(object):
         return self._mode
     @mode.setter
     def mode(self, value):
+        self._mode = None
         if value is not None:
-            value = self.modes[self.modes.getIndex(value)]
-        self._mode = value
+            values = []
+            value = asList(value)
+            if not self.multiple and len(value) > 1:
+                raise ValueError('mode must be a single value')
+            for value in asList(value):
+                values.append(self.modes[self.modes.getIndex(value)])
+            if len(values):
+                if not self.multiple:
+                    self._mode = values[0]
+                else:
+                    self._mode = values
         self.updateSelected()
 
     @property
@@ -710,8 +827,8 @@ class ModeForm(object):
                 kw = dict(
                     l=label,
                     st='textOnly',
-                    onc=pm.Callback(self.modeChanged, m),
-                    ofc=pm.Callback(self.modeChanged),
+                    onc=pm.Callback(self.modeChanged, m, True),
+                    ofc=pm.Callback(self.modeChanged, m, False),
                 )
                 if self.annotations is not None and len(self.annotations) > i:
                     kw['ann'] = self.annotations[i]
@@ -733,6 +850,11 @@ class ModeForm(object):
             return ''
         return str(val)
 
+    def _deselectMode(self, value):
+        if value in self._mode:
+            self._mode.remove(value)
+        self.updateSelected()
+
     def updateSelected(self):
         """
         Update the selected items to reflect the current mode(s)
@@ -750,9 +872,12 @@ class ModeForm(object):
             self.encodeData[newLabel] = mode
             button.setLabel(newLabel)
 
-    def modeChanged(self, mode=None):
+    def modeChanged(self, mode=None, on=True):
         #if mode is none and radioMode = true, dont change mode
-        self.mode = mode
+        if on:
+            self.mode = mode
+        else:
+            self._deselectMode(mode)
         self.updateSelected()
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
