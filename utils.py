@@ -63,6 +63,23 @@ def title(bs='out', *args, **kwargs):
     return frame, txt
 
 
+
+ONELINE_COMPOUNDS = ['float3', 'double3']
+
+
+def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}):
+    autoKwargs = locals()
+    del autoKwargs['attr']
+    # multi
+    if attr.isMulti():
+        return MultiAttrLayout(attr, autoKwargs=autoKwargs, **multiKwargs)
+    # compound
+    if attr.isCompound() and attr.type() not in ONELINE_COMPOUNDS:
+        return CompoundAttrLayout(attr, autoKwargs=autoKwargs, **compoundKwargs)
+    # normal attribute
+    return attrControl(attr, **attrKwargs)
+
+
 def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
     """
     Automatically create a control for the given node attribute.
@@ -105,6 +122,97 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
     if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
         row.columnWidth((3, cw / 3.0 * 2))
     return ctl
+
+
+
+class CompoundAttrLayout(object):
+    def __init__(self, attr, autoKwargs={}, w=300, **kwargs):
+        if not attr.isCompound():
+            raise ValueError('{0} is not a compound attribute'.format(attr))
+        self.attr = attr
+        self.autoKwargs = autoKwargs
+        self.build(w=w, **kwargs)
+
+    def __str__(self):
+        return str(self.layout)
+
+    def build(self, w=300, **kwargs):
+        kw = dict(l=getAttrTitle(self.attr), bs='etchedIn', mw=4, mh=4, w=w)
+        kw.update(kwargs)
+        with pm.frameLayout(**kw) as self.layout:
+            self.buildContent()
+
+    def buildContent(self):
+        with pm.columnLayout(adj=True, rs=2):
+            for a in attr.children():
+                autoAttrControl(a, **self.autoKwargs)
+
+    def update(self):
+        self.layout.clear()
+        with self.layout:
+            self.buildContent()
+
+
+def addMultiItem(attr, insert=False):
+    """
+    Add an item to the given multi attribute.
+    `insert` -- insert into the first available index, otherwise adds to the end
+    """
+    if not attr.isMulti():
+        raise ValueError('{0} is not a multi attribute'.format(attr))
+    indices = attr.getArrayIndices()
+    max = 0
+    if len(indices):
+        max = sorted(indices)[-1]
+    index = None
+    if insert:
+        for i in range(max+1):
+            if i not in indices:
+                index = i
+                break
+    if index is None:
+        index = max + 1
+    attr[index].get()
+    return attr[index]
+
+
+class MultiAttrLayout(object):
+    def __init__(self, attr, autoKwargs={}, w=300, **kwargs):
+        if not attr.isMulti():
+            raise ValueError('{0} is not a multi attribute'.format(attr))
+        self.attr = attr
+        self.autoKwargs = autoKwargs
+        self.build(w=w, **kwargs)
+
+    def __str__(self):
+        return str(self.layout)
+
+    def build(self, w=300, **kwargs):
+        kw = dict(l=getAttrTitle(self.attr), bs='etchedIn', mw=4, mh=4, w=w)
+        kw.update(kwargs)
+        with pm.frameLayout(**kw) as self.layout:
+            self.buildContent()
+
+    def buildContent(self):
+        with pm.columnLayout(adj=True, rs=2):
+            pm.button(l='Add Item', c=pm.Callback(self.addItem))
+            for i in self.attr.getArrayIndices():
+                autoAttrControl(self.attr[i], **self.autoKwargs)
+
+    def update(self):
+        self.layout.clear()
+        with self.layout:
+            self.buildContent()
+
+    def addItem(self):
+        addMultiItem(self.attr)
+        pm.evalDeferred(self.update)
+
+    def removeItem(self, index):
+        removeMultiItem(self.attr, index)
+        pm.evalDeferred(self.update)
+
+
 
 def layoutForm(form, ratios, spacing=2, offset=0, vertical=False, fullAttach=True, flip=False):
     """
