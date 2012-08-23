@@ -727,7 +727,8 @@ class DataLayout(object):
     Linewrapping and truncation can be used to organize how the data is displayed.
     Functions that return custom controls can be added as values
     """
-    def __init__(self, data=None, ratio=(1, 3), scroll=False, linewrap=None, truncate=None):
+    def __init__(self, data=None, ratio=(1, 3), scroll=False, linewrap=None, truncate=None, sortedKeys=None):
+        self.sortedKeys = sortedKeys
         self.build()
         self._ratio = ratio
         self._scroll = scroll
@@ -801,7 +802,20 @@ class DataLayout(object):
             if not hasattr(self.data, 'items'):
                 return
             last = None
-            for k, v in self.data.items():
+
+            allItems = self.data.items()
+            sortedItems = []
+            if self.sortedKeys:
+                # First remove each sorted key in order
+                for key in self.sortedKeys:
+                    for i, item in enumerate(allItems):
+                        if key == item[0]:
+                            sortedItems.append(allItems.pop(i))
+            # Then add the rest
+            sortedItems.extend(allItems)
+
+            for item in sortedItems:
+                k, v = item
                 lbl = pm.text(l=self.encode(k), al='right', en=False)
                 kw = dict(ww=self.linewrap) if self.linewrap is not None else {}
                 if hasattr(v, '__call__'):
