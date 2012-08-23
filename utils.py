@@ -64,7 +64,7 @@ def title(bs='out', *args, **kwargs):
 
 
 
-def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, messageBuilder=None, messageKwargs={}):
+def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, customBuilder=None, customKwargs={}):
     """
     Create a control layout automatically for the given attribute.
     Determines whether to create a normal control form, a compound or multi layout.
@@ -72,20 +72,22 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, mess
     `attrKwargs` -- kwargs to pass to attrControl
     `compoundKwargs` -- kwargs to pass to CompoundAttrLayout
     `multiKwargs` -- kwargs to pass to MultiAttrLayout
-    `messageBuilder` -- if given, will use this function to build message attribute forms
-    `messageKwargs` -- kwargs to pass to the given messageBuilder
+    `customBuilder` -- if given, will use this function to build message attribute forms
+    `customKwargs` -- kwargs to pass to the given customBuilder
     """
     autoKwargs = locals()
     del autoKwargs['attr']
+    # custom
+    if hasattr(customBuilder, '__call__'):
+        result = customBuilder(attr, **customKwargs)
+        if result:
+            return result
     # multi
     if attr.isMulti():
         return MultiAttrLayout(attr, autoKwargs=autoKwargs, **multiKwargs)
     # compound
     if attr.isCompound() and attr.type() not in CompoundAttrLayout.compoundTypes:
         return CompoundAttrLayout(attr, autoKwargs=autoKwargs, **compoundKwargs)
-    # message
-    if attr.type() == 'message' and hasattr(messageBuilder, '__call__'):
-        return messageBuilder(attr, **messageKwargs)
     # normal attribute
     try:
         result = attrControl(attr, **attrKwargs)
@@ -94,7 +96,7 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, mess
     return result
 
 
-def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
+def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, **kwargs):
     """
     Automatically create a control for the given node attribute.
     This returns a attrControlGrp but sets it up with more configurability.
@@ -104,6 +106,8 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
     `ls` -- the spacing between the label and content
     `al` -- the label alignment
     """
+    if hasattr(labelfnc, '__call__'):
+        kwargs['l'] = labelfnc(attr)
     ctl = pm.attrControlGrp(a=attr, **kwargs)
     children = ctl.getChildren()
     count = len(children)
@@ -138,9 +142,13 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
     return ctl
 
 
-def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', **kwargs):
+def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', labelfnc=None, **kwargs):
     with pm.formLayout(h=20) as form:
-        pm.text(l=getAttrTitle(attr), en=False, w=lw, al=al, **kwargs)
+        if hasattr(labelfnc, '__call__'):
+            kwargs['l'] = labelfnc(attr)
+        else:
+            kwargs['l'] = getAttrTitle(attr)
+        pm.text(en=False, w=lw, al=al, **kwargs)
         pm.separator(st='none')
         layoutForm(form, (0, 1))
     return form
@@ -150,18 +158,25 @@ def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', **kwargs):
 class CompoundAttrLayout(object):
     compoundTypes = ['float2', 'float3', 'double2', 'double3', 'long2', 'long3', 'short2', 'short3']
 
-    def __init__(self, attr, autoKwargs={}, w=300, **kwargs):
+    def __init__(self, attr, autoKwargs={}, w=300, labelfnc=None, **kwargs):
         if not attr.isCompound():
             raise ValueError('{0} is not a compound attribute'.format(attr))
         self.attr = attr
         self.autoKwargs = autoKwargs
+        self.labelfnc = labelfnc
         self.build(w=w, **kwargs)
 
     def __str__(self):
         return str(self.layout)
 
+    @property
+    def label(self):
+        if hasattr(self.labelfnc, '__call__'):
+            return self.labelfnc(self.attr)
+        return getAttrTitle(self.attr)
+
     def build(self, w=300, **kwargs):
-        kw = dict(l=getAttrTitle(self.attr), bs='etchedIn', mw=4, mh=4, w=w)
+        kw = dict(l=self.label, bs='etchedIn', mw=4, mh=4, w=w)
         kw.update(kwargs)
         with pm.frameLayout(**kw) as self.layout:
             self.buildContent()
@@ -210,11 +225,12 @@ def removeMultiItem(attr, index):
 
 
 class MultiAttrLayout(object):
-    def __init__(self, attr, autoKwargs={}, w=300, **kwargs):
+    def __init__(self, attr, autoKwargs={}, w=300, labelfnc=None, **kwargs):
         if not attr.isMulti():
             raise ValueError('{0} is not a multi attribute'.format(attr))
         self.attr = attr
         self.autoKwargs = autoKwargs
+        self.labelfnc = labelfnc
         self.build(w=w, **kwargs)
 
     def __str__(self):
@@ -222,6 +238,8 @@ class MultiAttrLayout(object):
 
     @property
     def label(self):
+        if hasattr(self.labelfnc, '__call__'):
+            return self.labelfnc(self.attr)
         l = getAttrTitle(self.attr)
         l = '{0} ({1})'.format(l, self.attr.numElements())
         return l
