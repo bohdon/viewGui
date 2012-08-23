@@ -64,7 +64,17 @@ def title(bs='out', *args, **kwargs):
 
 
 
-def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}):
+def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, messageBuilder=None, messageKwargs={}):
+    """
+    Create a control layout automatically for the given attribute.
+    Determines whether to create a normal control form, a compound or multi layout.
+
+    `attrKwargs` -- kwargs to pass to attrControl
+    `compoundKwargs` -- kwargs to pass to CompoundAttrLayout
+    `multiKwargs` -- kwargs to pass to MultiAttrLayout
+    `messageBuilder` -- if given, will use this function to build message attribute forms
+    `messageKwargs` -- kwargs to pass to the given messageBuilder
+    """
     autoKwargs = locals()
     del autoKwargs['attr']
     # multi
@@ -73,8 +83,15 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}):
     # compound
     if attr.isCompound() and attr.type() not in CompoundAttrLayout.compoundTypes:
         return CompoundAttrLayout(attr, autoKwargs=autoKwargs, **compoundKwargs)
+    # message
+    if attr.type() == 'message' and hasattr(messageBuilder, '__call__'):
+        return messageBuilder(attr, **messageKwargs)
     # normal attribute
-    return attrControl(attr, **attrKwargs)
+    try:
+        result = attrControl(attr, **attrKwargs)
+    except:
+        result = unknownAttrControl(attr, **attrKwargs)
+    return result
 
 
 def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
@@ -119,6 +136,15 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', **kwargs):
     if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
         row.columnWidth((3, cw / 3.0 * 2))
     return ctl
+
+
+def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', **kwargs):
+    with pm.formLayout(h=20) as form:
+        pm.text(l=getAttrTitle(attr), en=False, w=lw, al=al, **kwargs)
+        pm.separator(st='none')
+        layoutForm(form, (0, 1))
+    return form
+
 
 
 class CompoundAttrLayout(object):
@@ -194,8 +220,14 @@ class MultiAttrLayout(object):
     def __str__(self):
         return str(self.layout)
 
+    @property
+    def label(self):
+        l = getAttrTitle(self.attr)
+        l = '{0} ({1})'.format(l, self.attr.numElements())
+        return l
+
     def build(self, w=300, **kwargs):
-        kw = dict(l=getAttrTitle(self.attr), bs='etchedIn', mw=4, mh=4, w=w)
+        kw = dict(l=self.label, bs='etchedIn', mw=4, mh=4, w=w)
         kw.update(kwargs)
         with pm.frameLayout(**kw) as self.layout:
             self.buildContent()
@@ -221,10 +253,12 @@ class MultiAttrLayout(object):
         new = addMultiItem(self.attr)
         with self.column:
             self.buildItem(new.index())
+        self.layout.setLabel(self.label)
 
     def removeItem(self, index, form):
         pm.deleteUI(form)
         removeMultiItem(self.attr, index)
+        self.layout.setLabel(self.label)
 
 
 
