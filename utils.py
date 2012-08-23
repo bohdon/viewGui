@@ -563,8 +563,12 @@ class FilterList(ItemList):
             allValues.extend(item)
         if self._searchFilter and self.child is None:
             for item in allValues:
-                if self._searchFilter in item:
-                    result.append(item)
+                searches = re.split('[; |,]',self._searchFilter)
+                found = False
+                for search in searches:
+                    if search in item:
+                        found = True
+                if found: result.append(item)
         else:
             result.extend(allValues)
         result.sort()
@@ -803,22 +807,24 @@ class ModeForm(object):
 
     @property
     def mode(self):
-        return self._mode
+        if not self.multiple:
+            if self._mode:
+                return self._mode[0]
+            else:
+                return None
+        else:
+            return self._mode
     @mode.setter
     def mode(self, value):
         self._mode = None
         if value is not None:
-            values = []
-            value = asList(value)
-            if not self.multiple and len(value) > 1:
+            result = []
+            values = asList(value)
+            if not self.multiple and len(values) > 1:
                 raise ValueError('mode must be a single value')
-            for value in asList(value):
-                values.append(self.modes[self.modes.getIndex(value)])
-            if len(values):
-                if not self.multiple:
-                    self._mode = values[0]
-                else:
-                    self._mode = values
+            result.extend([self.modes[self.modes.getIndex(v)] for v in values])
+            if len(result):
+                self._mode = result
         self.updateSelected()
 
     @property
@@ -869,6 +875,18 @@ class ModeForm(object):
             self._mode.remove(value)
         self.updateSelected()
 
+    def _selectMode(self, value):
+        if self.multiple:
+            if value not in self._mode:
+                self._mode.append(value)
+        else:
+            self.mode = value
+        self.updateSelected()
+
+    def selectAll(self):
+        if self.multiple:
+            self.mode = [str(v) for v in self.modes]
+
     def updateSelected(self):
         """
         Update the selected items to reflect the current mode(s)
@@ -889,10 +907,9 @@ class ModeForm(object):
     def modeChanged(self, mode=None, on=True):
         #if mode is none and radioMode = true, dont change mode
         if on:
-            self.mode = mode
+            self._selectMode(mode)
         else:
             self._deselectMode(mode)
-        self.updateSelected()
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
 
