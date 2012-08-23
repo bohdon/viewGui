@@ -707,6 +707,7 @@ class DataLayout(object):
     to automatically populate text objects.
 
     Linewrapping and truncation can be used to organize how the data is displayed.
+    Functions that return custom controls can be added as values
     """
     def __init__(self, data=None, ratio=(1, 3), scroll=False, linewrap=None, truncate=None):
         self.build()
@@ -785,7 +786,13 @@ class DataLayout(object):
             for k, v in self.data.items():
                 lbl = pm.text(l=self.encode(k), al='right', en=False)
                 kw = dict(ww=self.linewrap) if self.linewrap is not None else {}
-                val = pm.text(l=self.encode(v), al='left', **kw)
+                if hasattr(v, '__call__'):
+                    try:
+                        val = v()
+                    except:
+                        LOG.error("Invalid control for key: {0}".format(k))
+                else:
+                    val = pm.text(l=self.encode(v), al='left', **kw)
                 layoutFormChildren(form, (lbl, val), self.ratio, fullAttach=False)
                 if last is not None:
                     attachFormChildren(form, (lbl, val), 'top', offset=self.offset, ctl=last)
