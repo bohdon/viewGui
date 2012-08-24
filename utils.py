@@ -284,12 +284,22 @@ class AttrIconTextCheckBox(object):
     Creates an iconTextCheckBox that controls one or more attributes.
     """
     def __init__(self, attrs, l=None, **kwargs):
-        self.attrs = asList(attrs)
+        self.attrs = attrs
         self.build(l=l, **kwargs)
         self.changeCallback = None
 
     def __str__(self):
         return str(self.control)
+
+    @property
+    def attrs(self):
+        return self._attrs
+    @attrs.setter
+    def attrs(self, value):
+        value = asList(value)
+        value = [a for a in value if isinstance(a, pm.Attribute) and a.isSettable()]
+        self._attrs = asList(value)
+
 
     def build(self, l=None, **kwargs):
         if l is None:
@@ -313,19 +323,25 @@ class AttrIconTextCheckBox(object):
     def toggleAttrs(self):
         off = [a for a in self.attrs if not a.get()]
         if len(off) == len(self.attrs):
-            for a in self.attrs:
-                a.set(True)
+            self.set(True)
             self.control.setValue(True)
         elif len(off):
-            for a in off:
-                a.set(True)
+            self.set(True, off)
             self.control.setValue(True)
         else:
-            for a in self.attrs:
-                a.set(False)
+            self.set(False)
             self.control.setValue(False)
         if hasattr(self.changeCallback, '__call__'):
             self.changeCallback()
+
+    def set(self, value, attrs=None):
+        if attrs is None:
+            attrs = self.attrs
+        for a in attrs:
+            try:
+                a.set(value)
+            except:
+                pass
 
 
 class NodeSelectionCheckBox(object):
