@@ -200,7 +200,7 @@ def addMultiItem(attr, insert=False):
     if not attr.isMulti():
         raise ValueError('{0} is not a multi attribute'.format(attr))
     indices = attr.getArrayIndices()
-    max = 0
+    max = -1
     if len(indices):
         max = sorted(indices)[-1]
     index = None
@@ -277,6 +277,112 @@ class MultiAttrLayout(object):
         pm.deleteUI(form)
         removeMultiItem(self.attr, index)
         self.layout.setLabel(self.label)
+
+
+class AttrIconTextCheckBox(object):
+    """
+    Creates an iconTextCheckBox that controls one or more attributes.
+    """
+    def __init__(self, attrs, l=None, **kwargs):
+        self.attrs = asList(attrs)
+        self.build(l=l, **kwargs)
+        self.changeCallback = None
+
+    def __str__(self):
+        return str(self.control)
+
+    def build(self, l=None, **kwargs):
+        if l is None:
+            if len(self.attrs):
+                l = getAttrTitle(self.attrs[0])
+            else:
+                l = 'Attr Check Box'
+        kw = dict(l=l, v=self.getAttrsValue(), st='textOnly', cc=pm.Callback(self.toggleAttrs))
+        kw.update(kwargs)
+        self.control = pm.iconTextCheckBox(**kw)
+
+    def update(self):
+        self.control.setValue(self.getAttrsValue())
+
+    def getAttrsValue(self):
+        """ Return the all value of all attributes """
+        if not len(self.attrs):
+            return False
+        return all([a.get() for a in self.attrs])
+
+    def toggleAttrs(self):
+        off = [a for a in self.attrs if not a.get()]
+        if len(off) == len(self.attrs):
+            for a in self.attrs:
+                a.set(True)
+            self.control.setValue(True)
+        elif len(off):
+            for a in off:
+                a.set(True)
+            self.control.setValue(True)
+        else:
+            for a in self.attrs:
+                a.set(False)
+            self.control.setValue(False)
+        if hasattr(self.changeCallback, '__call__'):
+            self.changeCallback()
+
+
+class NodeSelectionCheckBox(object):
+    """
+    Creates an icon text check box that represents the selection of a set of nodes.
+    Clicking the button toggles the selection of the nodes and the 'update'
+    method can be used to change the state of the button to reflect whether or not
+    all of the nodes are selected.
+    """
+    def __init__(self, nodes, **kwargs):
+        self.build(**kwargs)
+        self.nodes = nodes
+        self.changeCallback = None
+
+    def __str__(self):
+        return str(self.control)
+
+    @property
+    def nodes(self):
+        return self._nodes
+    @nodes.setter
+    def nodes(self, value):
+        self._nodes = asList(value)
+        self.update()
+
+    def build(self, **kwargs):
+        kw = dict(st='iconOnly', i='edit.png', cc=pm.Callback(self.toggleSelection))
+        kw.update(kwargs)
+        self.control = pm.iconTextCheckBox(**kw)
+
+    def update(self):
+        self.control.setValue(self.areNodesSelected())
+
+    def areNodesSelected(self):
+        if not len(self.nodes):
+            return False
+        sel = pm.selected()
+        return all([n in sel for n in self.nodes])
+
+    def toggleSelection(self):
+        """
+        Toggle the selection of the nodes.
+        If none are selected, adds all, if some are selected, adds the remaining,
+        if all are selected, removes all.
+        """
+        sel = pm.selected()
+        missing = [n for n in self.nodes if n not in sel]
+        if len(missing) == len(self.nodes):
+            pm.select(self.nodes, add=True)
+            self.control.setValue(True)
+        elif len(missing):
+            pm.select(missing, add=True)
+            self.control.setValue(True)
+        else:
+            pm.select(self.nodes, d=True)
+        if hasattr(self.changeCallback, '__call__'):
+            self.changeCallback()
 
 
 
