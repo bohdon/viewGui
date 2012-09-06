@@ -836,7 +836,7 @@ class NodeList(ItemList):
         nodes = [n for n in self.selected if hasattr(n, 'select') or isinstance(n, pm.Attribute)]
         pm.select(nodes)
         if hasattr(self.selectCommand, '__call__'):
-            self.selectedCommand(nodes)
+            self.selectCommand(nodes)
 
 
 
