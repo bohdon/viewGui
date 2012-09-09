@@ -986,7 +986,7 @@ class ModeForm(object):
     Set the `modeChangedCommand` property to get callbacks when
     the mode is changed in the ui.
     """
-    def __init__(self, modes, annotations=None, modeChangedCommand=None, encode=None, multiple=False, **kwargs):
+    def __init__(self, modes, annotations=None, modeChangedCommand=None, encode=None, multiple=False, allowNone=False, **kwargs):
         self._mode = []
         self.modes = pm.util.enum.Enum(self.__class__.__name__, modes)
         self.annotations = annotations
@@ -994,8 +994,12 @@ class ModeForm(object):
         self.encodeData = {}
         self._customEncode = encode
         self.multiple = multiple
+        self.allowNone = allowNone
         self.build(**kwargs)
         self.modeChangedCommand = modeChangedCommand
+        if not self.allowNone:
+            self._mode = [self.modes[0]]
+            self.updateSelected()
 
     def __str__(self):
         return str(self.layout)
@@ -1103,8 +1107,10 @@ class ModeForm(object):
         #if mode is none and radioMode = true, dont change mode
         if on:
             self._selectMode(mode)
-        else:
+        elif self.allowNone:
             self._deselectMode(mode)
+        else:
+            self.updateSelected()
         if hasattr(self.modeChangedCommand, '__call__'):
             self.modeChangedCommand(mode)
 
