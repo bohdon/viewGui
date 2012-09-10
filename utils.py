@@ -903,6 +903,8 @@ class DataLayout(object):
         self.update()
 
     def encode(self, value):
+        if value is None:
+            value = ''
         value = str(value)
         if self.truncate is not None and len(value) > self.truncate:
             value = value[:self.truncate] + '...'
