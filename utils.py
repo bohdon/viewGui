@@ -30,7 +30,10 @@ def asList(value):
 
 def getAttrTitle(attr):
     n = attr.longName()
-    return re.sub('([A-Z])', ' \\1', n).title()
+    return toTitle(n)
+
+def toTitle(name):
+    return re.sub('([A-Z])', ' \\1', name).title()
 
 def getRadialMenuPositions(count):
     """ Return a list of radial positions for the given number of items """
@@ -72,7 +75,8 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, cust
     `attrKwargs` -- kwargs to pass to attrControl
     `compoundKwargs` -- kwargs to pass to CompoundAttrLayout
     `multiKwargs` -- kwargs to pass to MultiAttrLayout
-    `customBuilder` -- if given, will use this function to build message attribute forms
+    `customBuilder` -- if given, will use this function to build attribute controls.
+        if this builder does not return anything, the standard control builders will be used
     `customKwargs` -- kwargs to pass to the given customBuilder
     """
     autoKwargs = locals()
@@ -96,7 +100,7 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, cust
     return result
 
 
-def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, **kwargs):
+def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidths=True, **kwargs):
     """
     Automatically create a control for the given node attribute.
     This returns a attrControlGrp but sets it up with more configurability.
@@ -133,12 +137,13 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, **kwargs)
         else:
             h = 20
         row.setHeight(h)
-    # handle single number fields
-    if attr.type() in ('long', 'int', 'double', 'float'):
-        row.columnWidth((2, cw / 3.0))
-    # handle sliders with nav button
-    if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
-        row.columnWidth((3, cw / 3.0 * 2))
+    if autoWidths:
+        # handle single number fields
+        if attr.type() in ('long', 'int', 'double', 'float'):
+            row.columnWidth((2, cw / 3.0))
+        # handle sliders with nav button
+        if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
+            row.columnWidth((3, cw / 3.0 * 2))
     return ctl
 
 
