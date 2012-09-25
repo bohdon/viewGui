@@ -55,8 +55,7 @@ class View(object):
     _viewItemHeight = 34
     _frameItemWidth = 90
     
-    def __init__(self, parent, gui):
-        self._parent = parent
+    def __init__(self, gui):
         self.gui = gui
         self.showView = gui.showView
         self.viewName = self.__class__.__name__
@@ -68,7 +67,7 @@ class View(object):
     
     @property
     def visible(self):
-        return self._layout.getManage()
+        return not self._layout.getIsObscured()
     @visible.setter
     def visible(self, value):
         self._layout.setManage(value)
@@ -82,9 +81,8 @@ class View(object):
     
     def create(self):
         self.log.debug('building')
-        with self._parent:
-            with pm.formLayout() as self._layout:
-                self.build()
+        with pm.formLayout() as self._layout:
+            self.build()
         self.hide()
     
     def hide(self):
@@ -114,7 +112,7 @@ class View(object):
         Create buttons at the top of the view. These link to other views,
         and display the current view by highlighting it in white.
         
-        If a custom header is desired, this can method should be overridden.
+        If a custom header is desired, this method should be overridden.
         """
         links = self.links()
         if links != []:
@@ -297,7 +295,3 @@ class IconCaptureView(View):
     def closeWindow(self):
         if pm.window(self.gui.window, ex=True):
             pm.deleteUI(self.gui.window)
-
-
-
-

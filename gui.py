@@ -10,11 +10,14 @@ Copyright (c) 2012 Bohdon Sayre. All rights reserved.
 import pymel.core as pm
 import logging
 import view
+import time
 
 __all__ = [
     'Gui',
     'ViewGui',
     'IconCaptureGui',
+    'DockControl',
+    'ScriptedPanel',
 ]
 
 LOG = logging.getLogger(__name__)
@@ -173,6 +176,7 @@ class Gui(object):
             self._scriptJobs[event] = []
             if eventmap.has_key(event):
                 for key in eventmap[event]:
+                    print "Setting up script job: %s" % key
                     j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.window)
                     self._scriptJobs[event].append(j)
             elif event == 'onWindowClosed':
@@ -180,10 +184,12 @@ class Gui(object):
                 self._scriptJobs[event].append(j)
 
     def scriptJobUpdate(self, event):
+        print "Event: %s" % event
         v = self.curView
         if v is not None:
             fnc = getattr(v, event)
             if hasattr(fnc, '__call__'):
+                print "Running: %s" % fnc
                 fnc()
     
     def applyMetrics(self, m=None):
@@ -254,8 +260,9 @@ class Gui(object):
             return
         if self.getView(viewName) is None:
             c = self.getViewClass(viewName)
-            v = c(self._mainLayout, self)
-            v.create()
+            v = c(self)
+            with self._mainLayout:
+                v.create()
             self._viewInst[viewName] = v
             if v.metrics is not None:
                 self._viewMetrics[viewName] = v.metrics.copy()
@@ -287,5 +294,255 @@ def IconCaptureGui(name='viewGuiIconCaptureWin', title='Capture Icon', size=(128
     g.create()
     return g.curView
 
+class DockControl(Gui):
+    """
+    Display gui in a dockControl instead of a separate window.
+    These appear on the left and right sides of the viewport.
+    """
+    """
+    The main View Gui class. Contains a list of View subclasses that can be shown by name.
+    
+    The window has metrics, but Views may also have metrics that will be applied when
+    the View is shown.  The gui can ignore View metrics by setting ignoreViewMetrics to True.
+    """
+    _dockControl = None
+    def __init__(self, *args, **kwargs):
+        """
+        dockName - name of the dock dockControl
+        floating - True/False if dock is floating or docked
+        area - default area for the dock
+        """
+
+        self.dockName = kwargs.pop('dockName', None)
+        if not self.dockName and len(args) > 2:
+            self.dockName = "%sDock" % args[1]
+        self.floating = kwargs.pop('floating', False)
+        self.area = kwargs.pop('area', "left")
+        super(DockControl, self).__init__(*args, **kwargs)
+
+    @property
+    def dockControl(self):
+        return self._dockControl
+    
+    def dockVisibleChanged(self):
+        if pm.dockControl(self._dockControl, ex=True):
+            if not pm.dockControl(self._dockControl, q=True, vis=True):
+                self.mainLayout.clear()
+            else:
+                self._updateViews()
+
+    def create(self):
+        """ Build the window and show the default view """
+        self.deleteViews()
+        
+        # Dock
+        if pm.dockControl(self.dockName, ex=True):
+            pm.deleteUI(self.dockName)
+
+        # Window
+        if pm.window(self.winName, ex=True):
+            pm.deleteUI(self.winName)
+        
+        self._win = None
+        self.applyMetrics()
+
+        # For a dockControl, we've got to go create the ui this way
+        # otherwise when we create the dockControl it doesn't see the main layout
+        self._win = pm.window(self.winName, title=self.title)
+        with pm.frameLayout('mainForm', lv=False, bv=False, p=self._win) as self._mainLayout:
+            self.showDefaultView()
+
+            # Create the dockControl
+            self._dockControl = pm.dockControl(self.winName+"Dock",
+                con=self._win, aa=['left', 'right'], a=self.area, fl=int(self.floating), l=self.title,
+                vcc=pm.Callback(self.dockVisibleChanged),
+            )
+
+        self._win = self._mainLayout # For Script Jobs
+
+        pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
 
 
+
+class ScriptedPanel(Gui):
+    """
+    Display a gui in a ScriptedPanel.
+    These appear as panels inside viewports.
+    """
+    _scriptedPanel = None
+    _scriptedPanelType = None
+    INSTANCES = {}
+
+    def __init__(self, *args, **kwargs):
+        """
+        panelName - name of the scriptedPanel
+        """
+
+        self.panelName = kwargs.pop('panelName', None)
+        if not self.panelName and len(args) > 1:
+            self.panelName = "%sPanel" % args[0]
+        self.panelTypeName = "%sType" % self.panelName
+        print "panelName: %s" % self.panelName
+        super(ScriptedPanel, self).__init__(*args, **kwargs)
+        self.INSTANCES[self.panelName] = self
+
+        self.register()
+
+        # jobCmd = cbTemplate.format("_newSceneCallback")
+        # job = "scriptJob -replacePrevious -parent \"%s\" -event \"SceneOpened\" \"%s\";" % ( self.panelName, jobCmd )
+        # pm.mel.eval(job)
+
+    @property
+    def scriptedPanel(self):
+        return self._scriptedPanel
+
+    @property
+    def scriptedPanelType(self):
+        return self._scriptedPanelType
+
+    @property
+    def menuBar(self):
+        ctrl = pm.scriptedPanel(self.panelName, q=True, control=True)
+        return ctrl
+
+    def register(self):
+        """
+        Register the panel, and add the callbacks.
+        """
+
+        # Make sure the panel is deleted
+        try:
+            for i in range(0,3):
+                pm.deleteUI(self.panelName)
+        except:
+            pass
+
+        cbTemplate = "python(\"from viewGui.gui import ScriptedPanel; print ScriptedPanel.INSTANCES[\\\"{0}\\\"].{{0}}()\")".format(self.panelName)
+
+        # Create the panel type
+        if not pm.scriptedPanelType(self.panelTypeName, query=True, exists=True ):
+            pm.scriptedPanelType( self.panelTypeName, unique=True )
+
+        self._scriptedPanelType = pm.scriptedPanelType( self.panelTypeName, edit=True,
+                           unique=False,
+                           createCallback= cbTemplate.format("_createCallback"),
+                           initCallback= cbTemplate.format("_initCallback"),
+                           addCallback= cbTemplate.format("_addCallback"),
+                           removeCallback= cbTemplate.format("_removeCallback"),
+                           deleteCallback= cbTemplate.format("_deleteCallback"),
+                           saveStateCallback= cbTemplate.format("_saveStateCallback"),
+                          )
+
+        # Create the scripted panel
+        self._scriptedPanel = pm.scriptedPanel(self.panelName, unParent=True, type=self.panelTypeName, label=self.title)
+
+    def create(self, panelConfig=None):
+        '''
+        Setup a custom panel configuration and show it.
+        '''
+
+        if not panelConfig:
+            configName = "Butterfly_Default"
+            if pm.panelConfiguration(configName, q=True, ex=True):
+                print "Delete"
+                pm.deleteUI(configName)
+            panelConfig = pm.panelConfiguration(
+                                        configName,
+                                        label=configName,
+                                        sceneConfig=False,
+                                        configString="paneLayout -e -cn \"vertical2\" $gMainPane;",
+                                        addPanel=[
+                                                (True,
+                                                "Persp View",
+                                                "modelPanel",
+                                                ("{global int $gUseMenusInPanels;\
+                                                modelPanel -mbv $gUseMenusInPanels\
+                                                -unParent -l \"Persp View\" -cam persp;}" ),
+                                                "modelPanel -edit -l \"Persp View\"  -cam \"persp\" $panelName"),
+                                        
+                                                (False, # isFixed
+                                                'Butterfly:Rig',
+                                                'ButterflyRigPanel',
+                                                (""),
+                                                "outlinerPanel -edit -l \"Outliner\"  $panelName")
+                                        ]
+                                )
+
+            #    Update the main Maya window to reflect the custom panel configuration.
+            #    Note also that your custom configuration may be selected from any
+            #    panel's "Panels-"Saved Layouts" menu.
+            #
+            pm.mel.eval('setNamedPanelLayout( "%s" )' % configName)
+
+    def _addCallback(self):
+        """Create UI and parent any editors."""
+        print "Add Callback"
+
+        # Window
+        if pm.window(self.winName, ex=True):
+            pm.deleteUI(self.winName)
+        
+        self._win = None
+        self.applyMetrics()
+        
+        p = pm.currentParent()
+
+        self.deleteViews()
+        with pm.window(self.winName, title=self.title) as self._win:
+            self._mainLayout = pm.verticalLayout()
+        pm.verticalLayout(self._mainLayout, e=True, p=p)
+
+        self._win = self._mainLayout # For Script Jobs
+        self.showDefaultView()
+
+    def _saveStateCallback(self):
+        """Command to be called on save"""
+        print "Save State Callback"
+
+    def _newSceneCallback(self):
+        """Command to be call for new scene"""
+        print "New Scene Callback"
+
+    def _createCallback(self):
+        """Create any editors unparented here and do any other initialization required."""
+        print 'CREATE CALLBACK'
+
+    def _initCallback(self):
+        """Re-initialize the panel on file -new or file -open."""
+        print 'INIT CALLBACK'
+
+    def _removeCallback(self):
+        """Unparent any editors and save state if required."""
+        self.winClosed()
+
+    def _deleteCallback(self):
+        """Delete any editors and do any other cleanup required."""
+        print 'DELETE CALLBACK'
+
+    def _saveCallback(self):
+        """Save Callback."""
+        #print 'SAVE CALLBACK'
+        reCreateCommand = ''
+        return reCreateCommand
+
+    def showView(self, viewName):
+        if not self.hasView(viewName):
+            return
+        if viewName == self.curViewName:
+            return
+        self.hideCurView()
+        # create and show
+        v = self.getView(viewName)
+        # check persistence
+        if v is not None and not v.persistent:
+            self.deleteView(viewName)
+            v = None
+        if v is None:
+            self._createView(viewName)
+            v = self.getView(viewName)
+        v.show()
+        # apply metrics
+        if v.rememberMetrics and self._viewMetrics.has_key(viewName):
+            self.applyMetrics(self._viewMetrics[viewName])
+        self._curViewName = viewName
+        LOG.debug('showed view {0}'.format(viewName))
