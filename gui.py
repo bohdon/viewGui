@@ -176,7 +176,6 @@ class Gui(object):
             self._scriptJobs[event] = []
             if eventmap.has_key(event):
                 for key in eventmap[event]:
-                    print "Setting up script job: %s" % key
                     j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.window)
                     self._scriptJobs[event].append(j)
             elif event == 'onWindowClosed':
@@ -184,12 +183,10 @@ class Gui(object):
                 self._scriptJobs[event].append(j)
 
     def scriptJobUpdate(self, event):
-        print "Event: %s" % event
         v = self.curView
         if v is not None:
             fnc = getattr(v, event)
             if hasattr(fnc, '__call__'):
-                print "Running: %s" % fnc
                 fnc()
     
     def applyMetrics(self, m=None):
@@ -312,7 +309,6 @@ class DockControl(Gui):
         floating - True/False if dock is floating or docked
         area - default area for the dock
         """
-
         self.dockName = kwargs.pop('dockName', None)
         if not self.dockName and len(args) > 2:
             self.dockName = "%sDock" % args[1]
@@ -363,7 +359,6 @@ class DockControl(Gui):
         pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
 
 
-
 class ScriptedPanel(Gui):
     """
     Display a gui in a ScriptedPanel.
@@ -371,26 +366,45 @@ class ScriptedPanel(Gui):
     """
     _scriptedPanel = None
     _scriptedPanelType = None
-    INSTANCES = {}
+    TYPE_INSTANCES = {}
 
     def __init__(self, *args, **kwargs):
         """
         panelName - name of the scriptedPanel
         """
-
-        self.panelName = kwargs.pop('panelName', None)
-        if not self.panelName and len(args) > 1:
-            self.panelName = "%sPanel" % args[0]
-        self.panelTypeName = "%sType" % self.panelName
-        print "panelName: %s" % self.panelName
+        self.INSTANCES = {}
         super(ScriptedPanel, self).__init__(*args, **kwargs)
-        self.INSTANCES[self.panelName] = self
-
+        
         self.register()
 
         # jobCmd = cbTemplate.format("_newSceneCallback")
         # job = "scriptJob -replacePrevious -parent \"%s\" -event \"SceneOpened\" \"%s\";" % ( self.panelName, jobCmd )
         # pm.mel.eval(job)
+
+    @property
+    def numInstances(self):
+        return len(self.INSTANCES)
+
+    @property
+    def panelName(self):
+        name = "{0}Panel".format(self.title)
+        # if self.numInstances > 0:
+        #     name += "_copy{0}".format(self.numInstances)
+        return name
+
+    @property
+    def panelTitle(self):
+        name = "{0}".format(self.title)
+        # if self.numInstances > 0:
+        #     name += "_copy{0}".format(self.numInstances)
+        return name
+
+    @property
+    def panelType(self):
+        name = "{0}Type".format(self.title)
+        # if self.numInstances > 0:
+        #     name += "_copy{0}".format(self.numInstances)
+        return name
 
     @property
     def scriptedPanel(self):
@@ -409,7 +423,6 @@ class ScriptedPanel(Gui):
         """
         Register the panel, and add the callbacks.
         """
-
         # Make sure the panel is deleted
         try:
             for i in range(0,3):
@@ -417,13 +430,13 @@ class ScriptedPanel(Gui):
         except:
             pass
 
-        cbTemplate = "python(\"from viewGui.gui import ScriptedPanel; print ScriptedPanel.INSTANCES[\\\"{0}\\\"].{{0}}()\")".format(self.panelName)
+        cbTemplate = "python(\"from viewGui.gui import ScriptedPanel; print ScriptedPanel.TYPE_INSTANCES[\\\"{0}\\\"].{{0}}()\")".format(self.panelType)
 
         # Create the panel type
-        if not pm.scriptedPanelType(self.panelTypeName, query=True, exists=True ):
-            pm.scriptedPanelType( self.panelTypeName, unique=True )
+        if not pm.scriptedPanelType(self.panelType, query=True, exists=True ):
+            pm.scriptedPanelType(self.panelType, unique=False )
 
-        self._scriptedPanelType = pm.scriptedPanelType( self.panelTypeName, edit=True,
+        self._scriptedPanelType = pm.scriptedPanelType( self.panelType, edit=True,
                            unique=False,
                            createCallback= cbTemplate.format("_createCallback"),
                            initCallback= cbTemplate.format("_initCallback"),
@@ -434,45 +447,34 @@ class ScriptedPanel(Gui):
                           )
 
         # Create the scripted panel
-        self._scriptedPanel = pm.scriptedPanel(self.panelName, unParent=True, type=self.panelTypeName, label=self.title)
+        p = pm.scriptedPanel(self.panelName, unParent=True, type=self.panelType, label=self.panelTitle)
+        self.TYPE_INSTANCES[self.panelType] = self
+        self.INSTANCES[self.panelName] = p
 
-    def create(self, panelConfig=None):
+    def create(self, layout=None, layoutName=None):
         '''
         Setup a custom panel configuration and show it.
         '''
+        if not layout:
+            LOG.warning("No Panel Layout supplied to create. Panel will be available in the panel menu.")
+        else:
+            # Delete any current layouts with the same name
+            while pm.cmds.getPanel(cwl=layoutName):
+                existing = pm.cmds.getPanel(cwl=layoutName)
+                if existing:
+                    pm.deleteUI(existing, panelConfig=True)
 
-        if not panelConfig:
-            configName = "Butterfly_Default"
-            if pm.panelConfiguration(configName, q=True, ex=True):
-                print "Delete"
-                pm.deleteUI(configName)
-            panelConfig = pm.panelConfiguration(
-                                        configName,
-                                        label=configName,
-                                        sceneConfig=False,
-                                        configString="paneLayout -e -cn \"vertical2\" $gMainPane;",
-                                        addPanel=[
-                                                (True,
-                                                "Persp View",
-                                                "modelPanel",
-                                                ("{global int $gUseMenusInPanels;\
-                                                modelPanel -mbv $gUseMenusInPanels\
-                                                -unParent -l \"Persp View\" -cam persp;}" ),
-                                                "modelPanel -edit -l \"Persp View\"  -cam \"persp\" $panelName"),
-                                        
-                                                (False, # isFixed
-                                                'Butterfly:Rig',
-                                                'ButterflyRigPanel',
-                                                (""),
-                                                "outlinerPanel -edit -l \"Outliner\"  $panelName")
-                                        ]
-                                )
+            # Create the new layout
+            pm.panelConfiguration(
+                    layoutName,
+                    label=layoutName,
+                    **layout
+                )
+                        
+            # Set the layout as active
+            pm.mel.eval('setNamedPanelLayout( "{0}" )'.format(layoutName))
 
-            #    Update the main Maya window to reflect the custom panel configuration.
-            #    Note also that your custom configuration may be selected from any
-            #    panel's "Panels-"Saved Layouts" menu.
-            #
-            pm.mel.eval('setNamedPanelLayout( "%s" )' % configName)
+    # ---- Callbacks -----
 
     def _addCallback(self):
         """Create UI and parent any editors."""
@@ -488,7 +490,7 @@ class ScriptedPanel(Gui):
         p = pm.currentParent()
 
         self.deleteViews()
-        with pm.window(self.winName, title=self.title) as self._win:
+        with pm.window(title=self.title) as self._win:
             self._mainLayout = pm.verticalLayout()
         pm.verticalLayout(self._mainLayout, e=True, p=p)
 
