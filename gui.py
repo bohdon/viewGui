@@ -315,6 +315,7 @@ class DockControl(Gui):
         self.floating = kwargs.pop('floating', False)
         self.area = kwargs.pop('area', "left")
         super(DockControl, self).__init__(*args, **kwargs)
+        self.register()
 
     @property
     def dockControl(self):
@@ -327,8 +328,8 @@ class DockControl(Gui):
             else:
                 self._updateViews()
 
-    def create(self):
-        """ Build the window and show the default view """
+    def register(self):
+        """ Register the dock in maya """
         self.deleteViews()
         
         # Dock
@@ -351,13 +352,31 @@ class DockControl(Gui):
             # Create the dockControl
             self._dockControl = pm.dockControl(self.winName+"Dock",
                 con=self._win, aa=['left', 'right'], a=self.area, fl=int(self.floating), l=self.title,
-                vcc=pm.Callback(self.dockVisibleChanged),
+                vcc=pm.Callback(self.dockVisibleChanged), vis=False,
             )
 
         self._win = self._mainLayout # For Script Jobs
 
         pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
 
+    def create(self):
+        """ Show the dock control """
+        self.showDock()
+
+    def showDock(self):
+        pm.dockControl(self.dockControl, e=True, vis=True)
+
+    def hideDock(self):
+        pm.dockControl(self.dockControl, e=True, vis=False)
+
+    def toggleDock(self):
+        if pm.dockControl(self.dockControl, q=True, vis=True):
+            self.hideDock()
+        else:
+            self.showDock()
+
+    def dockVisibleChanged(self):
+        pass
 
 class ScriptedPanel(Gui):
     """
@@ -377,10 +396,6 @@ class ScriptedPanel(Gui):
         
         self.register()
 
-        # jobCmd = cbTemplate.format("_newSceneCallback")
-        # job = "scriptJob -replacePrevious -parent \"%s\" -event \"SceneOpened\" \"%s\";" % ( self.panelName, jobCmd )
-        # pm.mel.eval(job)
-
     @property
     def numInstances(self):
         return len(self.INSTANCES)
@@ -388,22 +403,16 @@ class ScriptedPanel(Gui):
     @property
     def panelName(self):
         name = "{0}Panel".format(self.title)
-        # if self.numInstances > 0:
-        #     name += "_copy{0}".format(self.numInstances)
         return name
 
     @property
     def panelTitle(self):
         name = "{0}".format(self.title)
-        # if self.numInstances > 0:
-        #     name += "_copy{0}".format(self.numInstances)
         return name
 
     @property
     def panelType(self):
         name = "{0}Type".format(self.title)
-        # if self.numInstances > 0:
-        #     name += "_copy{0}".format(self.numInstances)
         return name
 
     @property
@@ -451,34 +460,22 @@ class ScriptedPanel(Gui):
         self.TYPE_INSTANCES[self.panelType] = self
         self.INSTANCES[self.panelName] = p
 
-    def create(self, layout=None, layoutName=None):
-        '''
-        Setup a custom panel configuration and show it.
-        '''
-        if not layout:
-            LOG.warning("No Panel Layout supplied to create. Panel will be available in the panel menu.")
-        else:
-            # Delete any current layouts with the same name
-            while pm.cmds.getPanel(cwl=layoutName):
-                existing = pm.cmds.getPanel(cwl=layoutName)
-                if existing:
-                    pm.deleteUI(existing, panelConfig=True)
+        # New Scene Callback
+        # pm.scriptJob(pm.Callback(self._newSceneCallback), replacePrevious=True, p=p, e=("SceneOpened"))
 
-            # Create the new layout
-            pm.panelConfiguration(
-                    layoutName,
-                    label=layoutName,
-                    **layout
-                )
-                        
-            # Set the layout as active
-            pm.mel.eval('setNamedPanelLayout( "{0}" )'.format(layoutName))
+    def create(self):
+        '''
+        There isn't a create method for the Scripted Panel
+        It must be shown by using utils.createPanelLayout()
+        '''
+        pass
 
-    # ---- Callbacks -----
+    def _newSceneCallback(self):
+        print "New Scene Callback"
+        pass
 
     def _addCallback(self):
         """Create UI and parent any editors."""
-        print "Add Callback"
 
         # Window
         if pm.window(self.winName, ex=True):
@@ -499,19 +496,19 @@ class ScriptedPanel(Gui):
 
     def _saveStateCallback(self):
         """Command to be called on save"""
-        print "Save State Callback"
+        pass
 
     def _newSceneCallback(self):
         """Command to be call for new scene"""
-        print "New Scene Callback"
+        pass
 
     def _createCallback(self):
         """Create any editors unparented here and do any other initialization required."""
-        print 'CREATE CALLBACK'
+        pass
 
     def _initCallback(self):
         """Re-initialize the panel on file -new or file -open."""
-        print 'INIT CALLBACK'
+        pass
 
     def _removeCallback(self):
         """Unparent any editors and save state if required."""
@@ -519,7 +516,7 @@ class ScriptedPanel(Gui):
 
     def _deleteCallback(self):
         """Delete any editors and do any other cleanup required."""
-        print 'DELETE CALLBACK'
+        pass
 
     def _saveCallback(self):
         """Save Callback."""
