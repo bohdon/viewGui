@@ -212,7 +212,6 @@ class Gui(object):
             pm.windowPref(self.winName, e=True, tlc=m['tlc'])
     
     def winClosed(self):
-        LOG.debug('gui closed')
         self.deleteViews()
     
     def deleteViews(self):
@@ -408,8 +407,7 @@ class ScriptedPanelTypes(object):
     """
 
     INSTANCES = {}
-    NAMES = {}
-    TITLES = {}
+    INIT_KWARGS = {}
 
     @staticmethod
     def callback(panelType, callback, name, newName=None):
@@ -428,8 +426,10 @@ class ScriptedPanelTypes(object):
             LOG.error('missing scripted panel instance: type: {0}, name: {1}, callback: {2}'.format(panelType, name, callback))
         else:
             method = getattr(inst, callback)
-            LOG.debug('calling {0}'.format(method))
+            LOG.debug('calling {0} on {1}'.format(method.__name__, name))
             result = method(**kw)
+            if callback == 'deleteCallback':
+                ScriptedPanelTypes.removeInstance(inst)
         if not result:
             result = ''
         return result
@@ -445,6 +445,12 @@ class ScriptedPanelTypes(object):
         LOG.debug('registered scripted panel instance: {0}, name: {1}'.format(inst, inst.panelName))
 
     @staticmethod
+    def removeInstance(inst):
+        for k in ScriptedPanelTypes.INSTANCES.keys():
+            if inst in ScriptedPanelTypes.INSTANCES[k]:
+                ScriptedPanelTypes.INSTANCES[k].remove(inst)
+
+    @staticmethod
     def getInstance(typ, name):
         """ Currently using instance id instead of name """
         if ScriptedPanelTypes.INSTANCES.has_key(typ):
@@ -453,7 +459,12 @@ class ScriptedPanelTypes(object):
                     return inst
 
     @staticmethod
-    def newType(typeName, unique=False):
+    def newType(typeName, unique=False, **kwargs):
+        """
+        Create and a new scripted panel type.
+        The given kwargs will be used to initialize new panels of this type,
+        so this is where viewClasses, defaultView, etc should be given.
+        """
         # create new panel type if it doesnt exist
         if not pm.scriptedPanelType(typeName, query=True, exists=True):
             newType = pm.scriptedPanelType(typeName)
@@ -465,16 +476,17 @@ class ScriptedPanelTypes(object):
             fmt = PANEL_MELCOPYSTATECALLBACK if cb == 'copyState' else PANEL_MELCALLBACK
             kw[cbname] = fmt.format(typeName, cbname)
         newType = pm.scriptedPanelType(typeName, edit=True, unique=unique, **kw)
+        # register init kwargs for this type
+        ScriptedPanelTypes.INIT_KWARGS[newType] = kwargs
         return newType
 
     @staticmethod
-    def newPanel(typ, title, name):
+    def newPanel(typ, title, name, **kwargs):
         """
         Create and return a new panel of the given type.
+        The given kwargs will be used to initialize the viewGui ScriptedPanel
         """
-        ScriptedPanelTypes.newType(typ)
-        ScriptedPanelTypes.TITLES[typ] = title
-        ScriptedPanelTypes.NAMES[typ] = name
+        ScriptedPanelTypes.newType(typ, **kwargs)
         pm.scriptedPanel(name, unParent=True, type=typ, label=title)
         return ScriptedPanelTypes.getInstance(typ, name)
 
@@ -482,18 +494,28 @@ class ScriptedPanelTypes(object):
     def createCallback(panelType, name):
         """ Create a viewGui ScriptedPanel instance from the newly created maya ScriptedPanel """
         pnl = pm.ui.ScriptedPanel(name)
-        inst = ScriptedPanel(pnl)
-        ScriptedPanelTypes.addInstance(inst)
+        try:
+            inst = ScriptedPanel(pnl, **ScriptedPanelTypes.INIT_KWARGS.get(panelType, {}))
+        except Exception as e:
+            LOG.error(e)
+            # abort panel creation
+            try:
+                pm.deleteUI(pnl)
+            except Exception as e:
+                LOG.error(e)
+        else:
+            LOG.debug('created new ScriptedPanel instance from {0!r}: {1}'.format(pnl, inst))
+            ScriptedPanelTypes.addInstance(inst)
 
 
 
 class ScriptedPanel(Gui):
     @staticmethod
-    def newPanel(typ, title, name):
+    def newPanel(typ, title, name, **kwargs):
         """
         Create and return a new panel of the given type.
         """
-        return ScriptedPanelTypes.newPanel(typ, title, name)
+        return ScriptedPanelTypes.newPanel(typ, title, name, **kwargs)
 
     @staticmethod
     def fromPanel(pnl):
@@ -502,31 +524,34 @@ class ScriptedPanel(Gui):
     def __init__(self, panel, *args, **kwargs):
         super(ScriptedPanel, self).__init__(*args, **kwargs)
         self.panel = panel
+        self.name = self.panel.name()
 
     def __repr__(self):
-        return '<ScriptedPanel | {0.panelName} | {0.panelType} | {0.panelTitle}>'.format(self)
+        return '<ScriptedPanel | {0.panelType} | {0.panelName} | {0.panelTitle}>'.format(self)
+
+    @property
+    def exists(self):
+        return pm.scriptedPanel(self.panel, q=True, ex=True)
 
     @property
     def panelName(self):
-        if self.panel:
-            return self.panel.name()
+        if self.exists:
+            self.name = self.panel.name()
+        return self.name
 
     @property
     def panelTitle(self):
-        if self.panel:
-            return self.panel.title()
+        if self.exists:
+            return self.panel.getLabel()
+    @panelTitle.setter
+    def panelTitle(self, value):
+        if self.exists:
+            self.panel.setLabel(value)
 
     @property
     def panelType(self):
-        if self.panel:
+        if self.exists:
             return self.panel.getType()
-
-    @property
-    def name(self):
-        return self.panelName
-    @name.setter
-    def name(self, value):
-        pass
 
     @property
     def menuBar(self):
@@ -571,6 +596,15 @@ class ScriptedPanel(Gui):
     def removeCallback(self):
         """ Unparent any editors and save state if required. """
         self.winClosed()
+        # delete this panel
+        pm.evalDeferred(self._removeDeferred)
+
+    def _removeDeferred(self):
+        if self.exists:
+            try:
+                pm.deleteUI(self.panel, pnl=True)
+            except Exception as e:
+                LOG.error(e)
 
     def deleteCallback(self):
         """ Delete any editors and do any other cleanup required. """
