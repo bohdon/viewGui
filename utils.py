@@ -2174,6 +2174,8 @@ class LibraryIconItem(LibraryItem):
     def labelHeight(self, value):
         self._labelHeight = int(value)
 
+
+
 def createPanelLayout(layoutDict, load=False):
     if layoutDict.has_key('label'):
         name = layoutDict['label']
@@ -2197,6 +2199,7 @@ def createPanelLayout(layoutDict, load=False):
     if load:
         loadNamedPanelLayout(name)
 
+
 def loadNamedPanelLayout(name):
     if pm.cmds.getPanel(cwl=name):
         pm.mel.eval('setNamedPanelLayout( "{0}" )'.format(name))
@@ -2204,5 +2207,6 @@ def loadNamedPanelLayout(name):
     else:
         LOG.debug("Panel Layout doesn't exist for {0}".format(name))
         return False
+
 
 

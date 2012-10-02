@@ -17,6 +17,7 @@ __all__ = [
     'ViewGui',
     'IconCaptureGui',
     'DockControl',
+    'ScriptedPanelTypes',
     'ScriptedPanel',
 ]
 
@@ -42,7 +43,7 @@ class Gui(object):
         `h` -- heigth of the window
         """
         self.title = title
-        self.winName = name
+        self.name = name
         self.metrics = {'w':w, 'h':h, 'tlc':None}
         
         self._win = None
@@ -62,6 +63,10 @@ class Gui(object):
         self.defaultView = defaultView
         
         LOG.debug('viewGui version: {0}'.format(VERSION))
+
+    @property
+    def winName(self):
+        return self.name
     
     @property
     def viewClasses(self):
@@ -378,106 +383,175 @@ class DockControl(Gui):
     def dockVisibleChanged(self):
         pass
 
+
+
+PANEL_MELCALLBACK = """
+proc viewGuiPanelCallback(string $panelName) {{
+    python("import maya.mel; from viewGui.gui import ScriptedPanelTypes");
+    python("ScriptedPanelTypes.callback({0!r}, {1!r}, '" + $panelName + "')");
+}}
+viewGuiPanelCallback
+"""
+PANEL_MELCOPYSTATECALLBACK = """
+proc viewGuiPanelCopyCallback(string $panelName, string $newPanelName) {{
+    python("import maya.mel; from viewGui.gui import ScriptedPanelTypes");
+    python("ScriptedPanelTypes.callback({0!r}, {1!r}, '" + $panelName + "', '" + $newPanelName + "')");
+}}
+viewGuiPanelCopyCallback
+"""
+PANEL_MELSTATECOMMAND = ''
+
+
+class ScriptedPanelTypes(object):
+    """
+    Manages existing custom scripted panel types and their instances.
+    """
+
+    INSTANCES = {}
+    NAMES = {}
+    TITLES = {}
+
+    @staticmethod
+    def callback(panelType, callback, name, newName=None):
+        # create panel
+        if callback == 'createCallback':
+            return ScriptedPanelTypes.createCallback(panelType, name)
+        # handle copy state extra args
+        if callback == 'copyStateCallback':
+            kw = dict(newPanel=ScriptedPanelTypes.getInstance(panelType, newName))
+        else:
+            kw = {}
+        # send callback to existing panel
+        inst = ScriptedPanelTypes.getInstance(panelType, name)
+        result = None
+        if not inst:
+            LOG.error('missing scripted panel instance: type: {0}, name: {1}, callback: {2}'.format(panelType, name, callback))
+        else:
+            method = getattr(inst, callback)
+            LOG.debug('calling {0}'.format(method))
+            result = method(**kw)
+        if not result:
+            result = ''
+        return result
+
+    @staticmethod
+    def addInstance(inst):
+        if not isinstance(inst, ScriptedPanel):
+            raise TypeError('excpted ScriptedPanel, got {0}'.format(type(inst).__name__))
+        typ = inst.panelType
+        if not ScriptedPanelTypes.INSTANCES.has_key(typ):
+            ScriptedPanelTypes.INSTANCES[typ] = []
+        ScriptedPanelTypes.INSTANCES[typ].append(inst)
+        LOG.debug('registered scripted panel instance: {0}, name: {1}'.format(inst, inst.panelName))
+
+    @staticmethod
+    def getInstance(typ, name):
+        """ Currently using instance id instead of name """
+        if ScriptedPanelTypes.INSTANCES.has_key(typ):
+            for inst in ScriptedPanelTypes.INSTANCES[typ]:
+                if inst.panelName == name:
+                    return inst
+
+    @staticmethod
+    def newType(typeName, unique=False):
+        # create new panel type if it doesnt exist
+        if not pm.scriptedPanelType(typeName, query=True, exists=True):
+            newType = pm.scriptedPanelType(typeName)
+            LOG.info('created new scripted panel type: {0}'.format(newType))
+        # edit panel type
+        kw = {}
+        for cb in ('create', 'init', 'add', 'remove', 'delete', 'saveState', 'copyState'):
+            cbname = '{0}Callback'.format(cb)
+            fmt = PANEL_MELCOPYSTATECALLBACK if cb == 'copyState' else PANEL_MELCALLBACK
+            kw[cbname] = fmt.format(typeName, cbname)
+        newType = pm.scriptedPanelType(typeName, edit=True, unique=unique, **kw)
+        return newType
+
+    @staticmethod
+    def newPanel(typ, title, name):
+        """
+        Create and return a new panel of the given type.
+        """
+        ScriptedPanelTypes.newType(typ)
+        ScriptedPanelTypes.TITLES[typ] = title
+        ScriptedPanelTypes.NAMES[typ] = name
+        pm.scriptedPanel(name, unParent=True, type=typ, label=title)
+        return ScriptedPanelTypes.getInstance(typ, name)
+
+    @staticmethod
+    def createCallback(panelType, name):
+        """ Create a viewGui ScriptedPanel instance from the newly created maya ScriptedPanel """
+        pnl = pm.ui.ScriptedPanel(name)
+        inst = ScriptedPanel(pnl)
+        ScriptedPanelTypes.addInstance(inst)
+
+
+
 class ScriptedPanel(Gui):
-    """
-    Display a gui in a ScriptedPanel.
-    These appear as panels inside viewports.
-    """
-    _scriptedPanel = None
-    _scriptedPanelType = None
-    TYPE_INSTANCES = {}
+    @staticmethod
+    def newPanel(typ, title, name):
+        """
+        Create and return a new panel of the given type.
+        """
+        return ScriptedPanelTypes.newPanel(typ, title, name)
 
-    def __init__(self, *args, **kwargs):
-        """
-        panelName - name of the scriptedPanel
-        """
-        self.INSTANCES = {}
+    @staticmethod
+    def fromPanel(pnl):
+        return ScriptedPanelTypes.getInstance(pnl.getType(), pnl.name())
+
+    def __init__(self, panel, *args, **kwargs):
         super(ScriptedPanel, self).__init__(*args, **kwargs)
-        
-        self.register()
+        self.panel = panel
 
-    @property
-    def numInstances(self):
-        return len(self.INSTANCES)
+    def __repr__(self):
+        return '<ScriptedPanel | {0.panelName} | {0.panelType} | {0.panelTitle}>'.format(self)
 
     @property
     def panelName(self):
-        name = "{0}Panel".format(self.title)
-        return name
+        if self.panel:
+            return self.panel.name()
 
     @property
     def panelTitle(self):
-        name = "{0}".format(self.title)
-        return name
+        if self.panel:
+            return self.panel.title()
 
     @property
     def panelType(self):
-        name = "{0}Type".format(self.title)
-        return name
+        if self.panel:
+            return self.panel.getType()
 
     @property
-    def scriptedPanel(self):
-        return self._scriptedPanel
-
-    @property
-    def scriptedPanelType(self):
-        return self._scriptedPanelType
+    def name(self):
+        return self.panelName
+    @name.setter
+    def name(self, value):
+        pass
 
     @property
     def menuBar(self):
-        ctrl = pm.scriptedPanel(self.panelName, q=True, control=True)
-        return ctrl
-
-    def register(self):
-        """
-        Register the panel, and add the callbacks.
-        """
-        # Make sure the panel is deleted
-        try:
-            for i in range(0,3):
-                pm.deleteUI(self.panelName)
-        except:
-            pass
-
-        cbTemplate = "python(\"from viewGui.gui import ScriptedPanel; print ScriptedPanel.TYPE_INSTANCES[\\\"{0}\\\"].{{0}}()\")".format(self.panelType)
-
-        # Create the panel type
-        if not pm.scriptedPanelType(self.panelType, query=True, exists=True ):
-            pm.scriptedPanelType(self.panelType, unique=False )
-
-        self._scriptedPanelType = pm.scriptedPanelType( self.panelType, edit=True,
-                           unique=False,
-                           createCallback= cbTemplate.format("_createCallback"),
-                           initCallback= cbTemplate.format("_initCallback"),
-                           addCallback= cbTemplate.format("_addCallback"),
-                           removeCallback= cbTemplate.format("_removeCallback"),
-                           deleteCallback= cbTemplate.format("_deleteCallback"),
-                           saveStateCallback= cbTemplate.format("_saveStateCallback"),
-                          )
-
-        # Create the scripted panel
-        p = pm.scriptedPanel(self.panelName, unParent=True, type=self.panelType, label=self.panelTitle)
-        self.TYPE_INSTANCES[self.panelType] = self
-        self.INSTANCES[self.panelName] = p
-
-        # New Scene Callback
-        # pm.scriptJob(pm.Callback(self._newSceneCallback), replacePrevious=True, p=p, e=("SceneOpened"))
+        if self.panelName:
+            return pm.scriptedPanel(self.panelName, q=True, control=True)
 
     def create(self):
-        '''
-        There isn't a create method for the Scripted Panel
-        It must be shown by using utils.createPanelLayout()
-        '''
+        """ Create an instance of this ScriptedPanel's panel type. """
+        raise Exception('ScriptedPanels must be created via ScriptedPanelTypes.newPanel')
+
+    def saveStateCallback(self):
+        """ Save the state of the panel """
+        return 'print("this is a state string");'
+
+    def createCallback(self):
+        """ Create any editors unparented here and do any other initialization required. """
         pass
 
-    def _newSceneCallback(self):
-        print "New Scene Callback"
+    def initCallback(self):
+        """ Re-initialize the panel on file new or file open. """
         pass
 
-    def _addCallback(self):
-        """Create UI and parent any editors."""
-
-        # Window
+    def addCallback(self):
+        """ Create UI and parent any editors. """
+        # delete window
         if pm.window(self.winName, ex=True):
             pm.deleteUI(self.winName)
         
@@ -494,35 +568,22 @@ class ScriptedPanel(Gui):
         self._win = self._mainLayout # For Script Jobs
         self.showDefaultView()
 
-    def _saveStateCallback(self):
-        """Command to be called on save"""
-        pass
-
-    def _newSceneCallback(self):
-        """Command to be call for new scene"""
-        pass
-
-    def _createCallback(self):
-        """Create any editors unparented here and do any other initialization required."""
-        pass
-
-    def _initCallback(self):
-        """Re-initialize the panel on file -new or file -open."""
-        pass
-
-    def _removeCallback(self):
-        """Unparent any editors and save state if required."""
+    def removeCallback(self):
+        """ Unparent any editors and save state if required. """
         self.winClosed()
 
-    def _deleteCallback(self):
-        """Delete any editors and do any other cleanup required."""
+    def deleteCallback(self):
+        """ Delete any editors and do any other cleanup required. """
         pass
 
-    def _saveCallback(self):
-        """Save Callback."""
-        #print 'SAVE CALLBACK'
-        reCreateCommand = ''
-        return reCreateCommand
+    def saveStateCallback(self):
+        """ Return a string that will restore the state of a panel on create to this panels current state """
+        return ''
+
+    def copyStateCallback(self, newPanel):
+        """ Copy the state of one panel to another """
+        pass
+
 
     def showView(self, viewName):
         if not self.hasView(viewName):
@@ -545,3 +606,6 @@ class ScriptedPanel(Gui):
             self.applyMetrics(self._viewMetrics[viewName])
         self._curViewName = viewName
         LOG.debug('showed view {0}'.format(viewName))
+
+
+
