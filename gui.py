@@ -459,6 +459,18 @@ class ScriptedPanelTypes(object):
                     return inst
 
     @staticmethod
+    def allPanels(panelType):
+        """ Return all panel instances of the given type """
+        return ScriptedPanelTypes.INSTANCES.get(panelType, [])
+
+    @staticmethod
+    def deleteAllPanels(panelType):
+        """ Delete all panels of the given type """
+        for p in ScriptedPanelTypes.INSTANCES.get(panelType, []):
+            if p.exists:
+                pm.deleteUI(p.panel, pnl=True)
+
+    @staticmethod
     def newType(typeName, unique=False, **kwargs):
         """
         Create and a new scripted panel type.
@@ -600,6 +612,13 @@ class ScriptedPanel(Gui):
 
     def _removeDeferred(self):
         if self.exists:
+            # panel is registered as torn off when it was previously not
+            # only delete when it was torn off and will not be any more (getTearOff == False)
+            if self.panel.getTearOff():
+                return
+            # only delete if not the last one
+            if len(ScriptedPanelTypes.allPanels(self.panelType)) < 2:
+                return
             try:
                 pm.deleteUI(self.panel, pnl=True)
             except Exception as e:
@@ -615,8 +634,11 @@ class ScriptedPanel(Gui):
 
     def copyStateCallback(self, newPanel):
         """ Copy the state of one panel to another """
-        pass
+        if newPanel:
+            pm.evalDeferred(pm.Callback(self._copyStateDeferred, newPanel))
 
+    def _copyStateDeferred(self, newPanel):
+        newPanel.panelTitle = self.panelTitle
 
     def showView(self, viewName):
         if not self.hasView(viewName):
