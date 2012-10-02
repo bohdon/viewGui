@@ -64,13 +64,19 @@ class View(object):
     def __del__(self):
         self.log.debug('destroyed')
         self.destroy()
+
+    @property
+    def exists(self):
+        return pm.layout(self._layout, q=True, ex=True)
     
     @property
     def visible(self):
-        return not self._layout.getIsObscured()
+        if self.exists:
+            return not self._layout.getIsObscured()
     @visible.setter
     def visible(self, value):
-        self._layout.setManage(value)
+        if self.exists:
+            self._layout.setManage(value)
     
     def destroy(self):
         """ Delete the layout of this view"""
