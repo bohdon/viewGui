@@ -37,7 +37,7 @@ from gui import *
 from utils import *
 from view import *
 
-__version__ = '0.5.2'
+__version__ = '0.5.4'
 gui.VERSION = __version__
 
 LOG = logging.getLogger(__name__)
