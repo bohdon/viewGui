@@ -481,12 +481,10 @@ class ScriptedPanelTypes(object):
         return newType
 
     @staticmethod
-    def newPanel(typ, title, name, **kwargs):
+    def newPanel(typ, title, name):
         """
         Create and return a new panel of the given type.
-        The given kwargs will be used to initialize the viewGui ScriptedPanel
         """
-        ScriptedPanelTypes.newType(typ, **kwargs)
         pm.scriptedPanel(name, unParent=True, type=typ, label=title)
         return ScriptedPanelTypes.getInstance(typ, name)
 
@@ -511,11 +509,12 @@ class ScriptedPanelTypes(object):
 
 class ScriptedPanel(Gui):
     @staticmethod
-    def newPanel(typ, title, name, **kwargs):
+    def newPanel(typ, title, name):
         """
         Create and return a new panel of the given type.
+        The scripted panel type must be created before a new panel can be made.
         """
-        return ScriptedPanelTypes.newPanel(typ, title, name, **kwargs)
+        return ScriptedPanelTypes.newPanel(typ, title, name)
 
     @staticmethod
     def fromPanel(pnl):
