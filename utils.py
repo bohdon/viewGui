@@ -825,7 +825,9 @@ class ManageableList(ItemList):
 class NodeList(ItemList):
     def __init__(self, *args, **kwargs):
         kwargs['sc'] = pm.Callback(self.onSelect)
+        kwargs['dcc'] = pm.Callback(self.onDoubleClick)
         super(NodeList, self).__init__(*args, **kwargs)
+        self.doubleClick = False
         self.selectCommand = None
 
     @property
@@ -836,8 +838,16 @@ class NodeList(ItemList):
         value = asList(value)
         self._items = value
         self.update()
+
+    def onDoubleClick(self):
+        if self.doubleClick:
+            self.selectNodes()
     
     def onSelect(self):
+        if not self.doubleClick:
+            self.selectNodes()
+
+    def selectNodes(self):
         nodes = [n for n in self.selected if hasattr(n, 'select') or isinstance(n, pm.Attribute)]
         pm.select(nodes)
         if hasattr(self.selectCommand, '__call__'):
