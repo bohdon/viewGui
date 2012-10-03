@@ -164,6 +164,7 @@ class Gui(object):
         self._win = None
         self.applyMetrics()
         with pm.window(self.winName, title=self.title) as self._win:
+            self.mainControl = self._win
             with pm.frameLayout('mainForm', lv=False, bv=False) as self._mainLayout:
                 self.showDefaultView()
         
@@ -181,7 +182,7 @@ class Gui(object):
             self._scriptJobs[event] = []
             if eventmap.has_key(event):
                 for key in eventmap[event]:
-                    j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.window)
+                    j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.mainControl)
                     self._scriptJobs[event].append(j)
             elif event == 'onWindowClosed':
                 j = pm.scriptJob(uid=(self.window, pm.Callback(self.scriptJobUpdate, event)), runOnce=True)
@@ -351,6 +352,7 @@ class DockControl(Gui):
         # otherwise when we create the dockControl it doesn't see the main layout
         self._win = pm.window(self.winName, title=self.title)
         with pm.frameLayout('mainForm', lv=False, bv=False, p=self._win) as self._mainLayout:
+            self.mainControl = self._mainLayout
             self.showDefaultView()
 
             # Create the dockControl
@@ -358,8 +360,6 @@ class DockControl(Gui):
                 con=self._win, aa=['left', 'right'], a=self.area, fl=int(self.floating), l=self.title,
                 vcc=pm.Callback(self.dockVisibleChanged), vis=False,
             )
-
-        self._win = self._mainLayout # For Script Jobs
 
         pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
 
@@ -601,8 +601,21 @@ class ScriptedPanel(Gui):
             self._mainLayout = pm.verticalLayout()
         pm.verticalLayout(self._mainLayout, e=True, p=p)
 
-        self._win = self._mainLayout # For Script Jobs
+        self._win = self._mainLayout
+        self.mainControl = self._mainLayout
         self.showDefaultView()
+        pm.evalDeferred(self.refreshScriptJobs)
+
+    def refreshScriptJobs(self):
+        recreate = []
+        for event in self._scriptJobs:
+            for j in self._scriptJobs[event]:
+                if not pm.scriptJob(ex=j):
+                    recreate.append(event)
+                    break
+        for event in recreate:
+            del self._scriptJobs[event]
+            self.setupScriptJob(event)
 
     def removeCallback(self):
         """ Unparent any editors and save state if required. """
@@ -639,28 +652,6 @@ class ScriptedPanel(Gui):
 
     def _copyStateDeferred(self, newPanel):
         newPanel.panelTitle = self.panelTitle
-
-    def showView(self, viewName):
-        if not self.hasView(viewName):
-            return
-        if viewName == self.curViewName:
-            return
-        self.hideCurView()
-        # create and show
-        v = self.getView(viewName)
-        # check persistence
-        if v is not None and not v.persistent:
-            self.deleteView(viewName)
-            v = None
-        if v is None:
-            self._createView(viewName)
-            v = self.getView(viewName)
-        v.show()
-        # apply metrics
-        if v.rememberMetrics and self._viewMetrics.has_key(viewName):
-            self.applyMetrics(self._viewMetrics[viewName])
-        self._curViewName = viewName
-        LOG.debug('showed view {0}'.format(viewName))
 
 
 
