@@ -11,6 +11,7 @@ import pymel.core as pm
 import logging
 import view
 import time
+from utils import Callback
 
 __all__ = [
     'Gui',
@@ -168,27 +169,28 @@ class Gui(object):
             with pm.frameLayout('mainForm', lv=False, bv=False) as self._mainLayout:
                 self.showDefaultView()
         
-        pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
+        pm.scriptJob(uid=(self._win, Callback(self.winClosed)))
 
     def setupScriptJob(self, event):
         if not self._scriptJobs.has_key(event):
             # setup script job
             eventmap = dict(
                 onSelectionChange=['SelectionChanged'],
-                onSceneChange=['SceneOpened', 'NewSceneOpened'],
+                onSceneChange=['SceneOpened', 'NewSceneOpened', 'PostSceneRead'],
                 onUndo=['Undo'],
                 onRedo=['Redo'],
             )
             self._scriptJobs[event] = []
             if eventmap.has_key(event):
                 for key in eventmap[event]:
-                    j = pm.scriptJob(e=(key, pm.Callback(self.scriptJobUpdate, event)), p=self.mainControl)
+                    j = pm.scriptJob(e=(key, Callback(self.scriptJobUpdate, event)), p=self.mainControl)
                     self._scriptJobs[event].append(j)
             elif event == 'onWindowClosed':
-                j = pm.scriptJob(uid=(self.window, pm.Callback(self.scriptJobUpdate, event)), runOnce=True)
+                j = pm.scriptJob(uid=(self.window, Callback(self.scriptJobUpdate, event)), runOnce=True)
                 self._scriptJobs[event].append(j)
 
     def scriptJobUpdate(self, event):
+        print "event: %s" % event # TESTING
         v = self.curView
         if v is not None:
             fnc = getattr(v, event)
@@ -358,10 +360,10 @@ class DockControl(Gui):
             # Create the dockControl
             self._dockControl = pm.dockControl(self.winName+"Dock",
                 con=self._win, aa=['left', 'right'], a=self.area, fl=int(self.floating), l=self.title,
-                vcc=pm.Callback(self.dockVisibleChanged), vis=False,
+                vcc=Callback(self.dockVisibleChanged), vis=False,
             )
 
-        pm.scriptJob(uid=(self._win, pm.Callback(self.winClosed)))
+        pm.scriptJob(uid=(self._win, Callback(self.winClosed)))
 
     def create(self):
         """ Show the dock control """
@@ -648,7 +650,7 @@ class ScriptedPanel(Gui):
     def copyStateCallback(self, newPanel):
         """ Copy the state of one panel to another """
         if newPanel:
-            pm.evalDeferred(pm.Callback(self._copyStateDeferred, newPanel))
+            pm.evalDeferred(Callback(self._copyStateDeferred, newPanel))
 
     def _copyStateDeferred(self, newPanel):
         newPanel.panelTitle = self.panelTitle

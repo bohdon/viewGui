@@ -7,6 +7,7 @@ Created by Bohdon Sayre on 2012-06-21.
 Copyright (c) 2012 Moonbot Studios. All rights reserved.
 """
 
+from maya import cmds
 import pymel.core as pm
 import logging
 import math
@@ -257,14 +258,14 @@ class MultiAttrLayout(object):
 
     def buildContent(self):
         with pm.columnLayout(adj=True, rs=2) as self.column:
-            pm.button(l='Add Item', c=pm.Callback(self.addItem))
+            pm.button(l='Add Item', c=Callback(self.addItem))
             for i in self.attr.getArrayIndices():
                 self.buildItem(i)
 
     def buildItem(self, index):
         with pm.formLayout() as form:
             autoAttrControl(self.attr[index], **self.autoKwargs)
-            pm.iconTextButton(i='removeRenderable.png', st='iconOnly', c=pm.Callback(self.removeItem, index, form))
+            pm.iconTextButton(i='removeRenderable.png', st='iconOnly', c=Callback(self.removeItem, index, form))
             layoutForm(form, (1, 0))
 
     def update(self):
@@ -312,7 +313,7 @@ class AttrIconTextCheckBox(object):
                 l = getAttrTitle(self.attrs[0])
             else:
                 l = 'Attr Check Box'
-        kw = dict(l=l, v=self.getAttrsValue(), st='textOnly', cc=pm.Callback(self.toggleAttrs))
+        kw = dict(l=l, v=self.getAttrsValue(), st='textOnly', cc=Callback(self.toggleAttrs))
         kw.update(kwargs)
         self.control = pm.iconTextCheckBox(**kw)
 
@@ -373,7 +374,7 @@ class NodeSelectionCheckBox(object):
         self.update()
 
     def build(self, **kwargs):
-        kw = dict(st='iconOnly', i='edit.png', cc=pm.Callback(self.toggleSelection))
+        kw = dict(st='iconOnly', i='edit.png', cc=Callback(self.toggleSelection))
         kw.update(kwargs)
         self.control = pm.iconTextCheckBox(**kw)
 
@@ -448,6 +449,7 @@ def layoutFormChildren(form, children, ratios, spacing=2, offset=0, vertical=Fal
     akey = 'top' if vertical else 'left'
     bkey = 'bottom' if vertical else 'right'
     fixedEnds = []
+    allKwargs = dict(af=[], ac=[], ap=[])
     # attach all fixed-width
     fixedGrps = ((pairs, akey), (reversed(pairs), bkey))
     if flip:
@@ -459,10 +461,9 @@ def layoutFormChildren(form, children, ratios, spacing=2, offset=0, vertical=Fal
                 fixedEnds.append(prev)
                 break
             if prev is None:
-                kw = dict(af=[(child, key, offset)])
+                allKwargs['af'].append((child, key, offset))
             else:
-                kw = dict(ac=[(child, key, spacing, prev)])
-            pm.formLayout(form, e=True, **kw)
+                allKwargs['ac'].append((child, key, spacing, prev))
             prev = child
             attached.append(child)
     # attach all expanding
@@ -476,24 +477,24 @@ def layoutFormChildren(form, children, ratios, spacing=2, offset=0, vertical=Fal
             aused = True
             # attach to first fixed group
             if fixedEnds[0] is None:
-                pm.formLayout(form, e=True, af=[(child, akey, offset)])
+                allKwargs['af'].append((child, akey, offset))
             else:
-                pm.formLayout(form, e=True, ac=[(child, akey, spacing, fixedEnds[0])])
+                allKwargs['ac'].append((child, akey, spacing, fixedEnds[0]))
         bused = False
         if i == len(expand) - 1:
             bused = True
             # attach to second fixed group
             if fixedEnds[1] is None:
-                pm.formLayout(form, e=True, af=[(child, bkey, offset)])
+                allKwargs['af'].append((child, bkey, offset))
             else:
-                pm.formLayout(form, e=True, ac=[(child, bkey, spacing, fixedEnds[1])])
+                allKwargs['ac'].append((child, bkey, spacing, fixedEnds[1]))
         # attach to position
         pos = (float(r+curUnit) / total) * divs
         curUnit += r
         if not aused:
-            pm.formLayout(form, e=True, ap=[(child, akey, spacing, lastPos)])
+            allKwargs['ap'].append((child, akey, spacing, lastPos))
         if not bused:
-            pm.formLayout(form, e=True, ap=[(child, bkey, spacing, pos)])
+            allKwargs['ap'].append((child, bkey, spacing, pos))
         lastPos = pos
     # full attach
     if fullAttach:
@@ -501,7 +502,9 @@ def layoutFormChildren(form, children, ratios, spacing=2, offset=0, vertical=Fal
         bokey = 'right' if vertical else 'bottom'
         for c in children:
             af = [(c, k, offset) for k in (aokey, bokey)]
-            pm.formLayout(form, e=True, af=af)
+            allKwargs['af'].extend(af)
+    # run command
+    pm.formLayout(form, e=True, **allKwargs)
 
 
 def attachFormChildren(form, children, terms, offset=2, ctl=None, pos=None):
@@ -686,8 +689,8 @@ class FilterList(ItemList):
         self._findOverride = False
         self.selectCommand = None
         self.doubleClickCommand = None
-        kwargs['selectCommand'] = pm.Callback(self._selectCommand)
-        kwargs['doubleClickCommand'] = pm.Callback(self._doubleClickCommand)
+        kwargs['selectCommand'] = Callback(self._selectCommand)
+        kwargs['doubleClickCommand'] = Callback(self._doubleClickCommand)
         super(FilterList, self).__init__(*args, **kwargs)
 
     @property
@@ -792,9 +795,9 @@ class ManageableList(ItemList):
                 fkw[k] = kwargs[k]
         with pm.formLayout(**fkw) as form:
             lst = self.control = pm.textScrollList(**kwargs)
-            add = pm.button(l='+', w=20, h=20, ann='Add', c=pm.Callback(self.onAdd))
-            rem = pm.button(l='-', w=20, h=20, ann='Remove', c=pm.Callback(self.onRemove))
-            clr = pm.button(l='x', w=20, h=20, ann='Clear', c=pm.Callback(self.onClear))
+            add = pm.button(l='+', w=20, h=20, ann='Add', c=Callback(self.onAdd))
+            rem = pm.button(l='-', w=20, h=20, ann='Remove', c=Callback(self.onRemove))
+            clr = pm.button(l='x', w=20, h=20, ann='Clear', c=Callback(self.onClear))
             pm.formLayout(form, e=True,
                 af=[(lst, 'left', 0), (lst, 'top', 0), (lst, 'bottom', 0), (clr, 'right', 0),
                     (add, 'bottom', 0), (rem, 'bottom', 0), (clr, 'bottom', 0)],
@@ -824,8 +827,8 @@ class ManageableList(ItemList):
 
 class NodeList(ItemList):
     def __init__(self, *args, **kwargs):
-        kwargs['sc'] = pm.Callback(self.onSelect)
-        kwargs['dcc'] = pm.Callback(self.onDoubleClick)
+        kwargs['sc'] = Callback(self.onSelect)
+        kwargs['dcc'] = Callback(self.onDoubleClick)
         super(NodeList, self).__init__(*args, **kwargs)
         self.doubleClick = False
         self.selectCommand = None
@@ -1063,8 +1066,8 @@ class ModeForm(object):
                 kw = dict(
                     l=label,
                     st='textOnly',
-                    onc=pm.Callback(self.modeChanged, m, True),
-                    ofc=pm.Callback(self.modeChanged, m, False),
+                    onc=Callback(self.modeChanged, m, True),
+                    ofc=Callback(self.modeChanged, m, False),
                 )
                 if self.annotations is not None and len(self.annotations) > i:
                     kw['ann'] = self.annotations[i]
@@ -1184,9 +1187,9 @@ class BrowsePathForm(object):
     def build(self):
         with pm.formLayout() as form:
             lbl = self.labelText = pm.text(l='', al='right', w=self.labelWidth)
-            pth = self.pathField = pm.textField(tx='', cc=pm.Callback(self.onChange))
+            pth = self.pathField = pm.textField(tx='', cc=Callback(self.onChange))
             self.buildShowMenu(self.pathField)
-            brs = self.browseBtn = pm.button(l='Browse', h=20, c=pm.Callback(self.browse))
+            brs = self.browseBtn = pm.button(l='Browse', h=20, c=Callback(self.browse))
             pm.formLayout(form, e=True,
                 af=[(lbl, 'top', 4), (lbl, 'left', 0), (brs, 'right', 0)],
                 ac=[(pth, 'left', 4, lbl), (pth, 'right', 4, brs)],
@@ -1196,7 +1199,7 @@ class BrowsePathForm(object):
 
     def buildShowMenu(self, parent):
         pm.popupMenu(p=parent)
-        pm.menuItem(l=SHOW_MSG, c=pm.Callback(self.show))
+        pm.menuItem(l=SHOW_MSG, c=Callback(self.show))
 
     def onChange(self):
         if self.changeCommand is not None:
@@ -1356,7 +1359,7 @@ class PathButtonForm(object):
                     mnu = self.buildPathsMenu(dir_, subPaths, current=path)
                     buildShowMenu(mnu, path)
                 else:
-                    btn = pm.button(l=os.path.basename(path), h=20, c=pm.Callback(self._command, path))
+                    btn = pm.button(l=os.path.basename(path), h=20, c=Callback(self._command, path))
                     buildShowMenu(btn, path)
                     if self.bgc is not None:
                         btn.setBackgroundColor(self.bgc)
@@ -1377,7 +1380,7 @@ class PathButtonForm(object):
         menu = pm.optionMenu(h=20)
         if self.bgc is not None:
             menu.setBackgroundColor(self.bgc)
-        menu.changeCommand(pm.Callback(self._browseCommand, root, menu))
+        menu.changeCommand(Callback(self._browseCommand, root, menu))
         if current is None:
             pm.menuItem(l='')
         values = []
@@ -1398,7 +1401,7 @@ class PathButtonForm(object):
 
     def _command(self, path):
         if hasattr(self.command, '__call__'):
-            pm.evalDeferred(pm.Callback(self.command, path))
+            pm.evalDeferred(Callback(self.command, path))
 
     def update(self):
         # TODO: update buttons in a relative fashion
@@ -1432,9 +1435,9 @@ def getShowCommand(path=None, obj=None, attr=None):
     if path is None:
         if obj is None or attr is None:
             raise ValueError('must provide atleast a path or object and attribute')
-        cmd = pm.Callback(_show)
+        cmd = Callback(_show)
     else:
-        cmd = pm.Callback(show, path)
+        cmd = Callback(show, path)
     return cmd
 
 
@@ -1893,7 +1896,7 @@ class LibraryItem(object):
         kw = dict(
             l=self.name,
             st='textOnly',
-            cc=pm.Callback(self.onClick),
+            cc=Callback(self.onClick),
             ann=self.filename,
         )
         if editable:
@@ -1904,8 +1907,8 @@ class LibraryItem(object):
             self.buildMenu()
 
     def buildMenu(self):
-        pm.menuItem(l='Rename', rp='N', c=pm.Callback(self.rename))
-        pm.menuItem(l='Delete', rp='S', c=pm.Callback(self.delete))
+        pm.menuItem(l='Rename', rp='N', c=Callback(self.rename))
+        pm.menuItem(l='Delete', rp='S', c=Callback(self.delete))
 
     def onFilenameChanged(self):
         if self.button is not None:
@@ -2111,7 +2114,7 @@ class LibraryIconItem(LibraryItem):
         with pm.formLayout(w=self.size, h=self.size + self.labelHeight) as form:
             kw = dict(
                 i=self.icon,
-                cc=pm.Callback(self.onClick),
+                cc=Callback(self.onClick),
                 w=self.size, h=self.size,
                 v=self.selected,
                 ann=self.filename,
@@ -2218,5 +2221,46 @@ def loadNamedPanelLayout(name):
         LOG.debug("Panel Layout doesn't exist for {0}".format(name))
         return False
 
+
+class Callback(object):
+    """
+    Enables deferred function evaluation with 'baked' arguments.
+    Useful where lambdas won't work...
+
+    It also ensures that the entire callback will be be represented by one
+    undo entry.
+
+    Example:
+
+    .. python::
+
+        import pymel as pm
+        def addRigger(rigger, **kwargs):
+            print "adding rigger", rigger
+
+        for rigger in riggers:
+            pm.menuItem(
+                label = "Add " + str(rigger),
+                c = Callback(addRigger,rigger,p=1))   # will run: addRigger(rigger,p=1)
+    """
+    def __init__(self,func,*args,**kwargs):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self,*args):
+        cmds.undoInfo(openChunk=1)
+        self.func(*self.args, **self.kwargs)
+        cmds.undoInfo(closeChunk=1)
+
+class CallbackWithArgs(Callback):
+    def __call__(self,*args,**kwargs):
+        # not sure when kwargs would get passed to __call__,
+        # but best not to remove support now
+        kwargsFinal = self.kwargs.copy()
+        kwargsFinal.update(kwargs)
+        cmds.undoInfo(openChunk=1)
+        self.func(*self.args + args, **kwargsFinal)
+        cmds.undoInfo(closeChunk=1)
 
 

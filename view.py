@@ -11,6 +11,7 @@ import pymel.core as pm
 import logging
 import os
 import utils
+from utils import Callback
 
 __all__ = [
     'View',
@@ -131,7 +132,7 @@ class View(object):
                             name = self.gui.getViewClass(viewName).displayName
                         if name is None:
                             name = viewName
-                        btn = pm.button(l=name, c=pm.Callback(self.showView, viewName), h=18)
+                        btn = pm.button(l=name, c=Callback(self.showView, viewName), h=18)
                         if viewName == self.viewName:
                             btn.setBackgroundColor([.86, .86, .86])
                         if last is None:
@@ -161,7 +162,7 @@ class View(object):
     def viewItem(self, viewName, l=None, ann='', bgc=[.25, .25, .25], en=True):
         """Create a button used to link to another view"""
         if l is None: l = viewName
-        btn = pm.button(l=l, c=pm.Callback(self.showView, viewName), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
+        btn = pm.button(l=l, c=Callback(self.showView, viewName), ann=ann, h=self._viewItemHeight, bgc=bgc, en=en)
         return btn
     
     def frameItem(self, l='', c=None, ann='', bgc=None, en=True, mw=4, mh=4, bs='etchedIn'):
@@ -221,7 +222,7 @@ class IconCaptureView(View):
 
     def buildFooter(self):
         """ Override to build custom footer content for capturing icons """
-        pm.button(l='Choose', c=pm.Callback(self.captureIcon))
+        pm.button(l='Choose', c=Callback(self.captureIcon))
 
     def updateEditorFrame(self):
         bigger = max(*self.iconSize)
