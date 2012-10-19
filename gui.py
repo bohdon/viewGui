@@ -190,7 +190,6 @@ class Gui(object):
                 self._scriptJobs[event].append(j)
 
     def scriptJobUpdate(self, event):
-        print "event: %s" % event # TESTING
         v = self.curView
         if v is not None:
             fnc = getattr(v, event)
