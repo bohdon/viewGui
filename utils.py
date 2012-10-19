@@ -2253,6 +2253,11 @@ class Callback(object):
         self.func(*self.args, **self.kwargs)
         cmds.undoInfo(closeChunk=1)
 
+    def __str__(self):
+        _args = [repr(a) for a in self.args]
+        _kwargs = ["{0}={1}".format(k,v) for k,v in self.kwargs.items()]
+        return "{0}({1})".format(self.func.__name__, ", ".join(_args + _kwargs))
+
 class CallbackWithArgs(Callback):
     def __call__(self,*args,**kwargs):
         # not sure when kwargs would get passed to __call__,
@@ -2263,4 +2268,19 @@ class CallbackWithArgs(Callback):
         self.func(*self.args + args, **kwargsFinal)
         cmds.undoInfo(closeChunk=1)
 
+_LastCommand = None
+def button(*args, **kwargs):
+    '''
+    Add commandRepeatable to standard button
+    '''
+    def makeCommandRepeatable(c, *args, **kwargs):
+        global _LastCommand
+        c(*args, **kwargs)
+        _LastCommand = Callback(c, *args, **kwargs)
+        pm.repeatLast(ac="python(\"import viewGui.utils; viewGui.utils._LastCommand()\")")
 
+    if 'rpt' in kwargs:
+        rpt = kwargs.pop('rpt')
+        if 'c' in kwargs:
+            kwargs['c'] = CallbackWithArgs(makeCommandRepeatable, kwargs['c'])
+    return pm.button(*args, **kwargs)
