@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 
 LOG = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ def autoAttrControl(attr, attrKwargs={}, compoundKwargs={}, multiKwargs={}, cust
     return result
 
 
-def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidths=True, **kwargs):
+def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidths=True, wrapWidth=0, **kwargs):
     """
     Automatically create a control for the given node attribute.
     This returns a attrControlGrp but sets it up with more configurability.
@@ -122,6 +123,7 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidth
     # increase label padding
     row.columnAttach((1, 'right', ls))
     row.columnAlign((1, al))
+
     label.setWidth(lw)
     label.setAlign(al)
     # resize contents
@@ -137,7 +139,7 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidth
             h = kwargs['h']
         else:
             h = 20
-        row.setHeight(h)
+        child1.setHeight(h)
     if autoWidths:
         # handle single number fields
         if attr.type() in ('long', 'int', 'double', 'float'):
@@ -145,16 +147,26 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidth
         # handle sliders with nav button
         if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
             row.columnWidth((3, cw / 3.0 * 2))
+
+    # If wrapWidth is not zero
+    if wrapWidth:
+        label.setLabel("\n".join(textwrap.wrap(label.getLabel(), wrapWidth)))
+
     return ctl
 
 
-def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', labelfnc=None, **kwargs):
+def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', labelfnc=None, wrapWidth=0, **kwargs):
     with pm.formLayout(h=20) as form:
         if hasattr(labelfnc, '__call__'):
             kwargs['l'] = labelfnc(attr)
         else:
             kwargs['l'] = getAttrTitle(attr)
-        pm.text(en=False, w=lw, al=al, **kwargs)
+        label = pm.text(en=False, w=lw, al=al, **kwargs)
+        
+        # If wrapWidth is not zero
+        if wrapWidth:
+            label.setLabel("\n".join(textwrap.wrap(label.getLabel(), wrapWidth)))
+
         pm.separator(st='none')
         layoutForm(form, (0, 1))
     return form
@@ -648,7 +660,17 @@ class ItemList(object):
         self.control.deselectAll()
         self.control.setSelectIndexedItem(indeces)
 
+    def append(self, item):
+        self._items.append(item)
+        self.update()
+
     def build(self, **kwargs):
+        # Drag and Drop
+        if 'dgc' not in kwargs.keys() or 'dragCallback' not in kwargs.keys():
+            kwargs['dgc'] = self.dragCallback
+        if 'dpc' not in kwargs.keys() or 'dropCallback' not in kwargs.keys():
+            kwargs['dpc'] = self.dropCallback
+
         self.control = pm.textScrollList(**kwargs)
 
     def _encode(self, item):
@@ -668,7 +690,13 @@ class ItemList(object):
             n = self.format.format(index=i+1, name=n)
             self.control.append(n)
 
+    def dragCallback(self, dragCtrlName, x, y, modifiers):
+        s = self.selected
+        return s
 
+    def dropCallback(self, dragCtrlName, dropCtrlName, messages, x, y, dragType):
+        for m in messages:
+            self.append(m)
 
 class FilterList(ItemList):
     """
@@ -856,7 +884,13 @@ class NodeList(ItemList):
         if hasattr(self.selectCommand, '__call__'):
             self.selectCommand(nodes)
 
+    def dragCallback(self, dragCtrlName, x, y, modifiers):
+        s = self.selected
+        return [n.longName() for n in s]
 
+    def dropCallback(self, dragCtrlName, dropCtrlName, messages, x, y, dragType):
+        for m in messages:
+            self.append(pm.PyNode(m))
 
 class DataLayout(object):
     """
@@ -1141,13 +1175,14 @@ class BrowsePathForm(object):
     Creates a form with a path text field and a button
     to browse for an existing file or folder.
     """
-    def __init__(self, label=None, files=True, labelWidth=50):
+    def __init__(self, label=None, files=True, labelWidth=50, save=False):
         self.labelWidth = labelWidth
         self.build()
         self.label = label
         self.browseCaption = 'Choose a {itemTerm}'
         self.browseOkCaption = 'Choose'
         self.files = files
+        self.save = save
         self.changeCommand = None
 
     def __str__(self):
