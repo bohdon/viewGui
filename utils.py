@@ -2304,8 +2304,9 @@ class Callback(object):
 
     def __call__(self,*args):
         cmds.undoInfo(openChunk=1)
-        return self.func(*self.args, **self.kwargs)
+        result = self.func(*self.args, **self.kwargs)
         cmds.undoInfo(closeChunk=1)
+        return result
 
     def __str__(self):
         _args = [repr(a) for a in self.args]
@@ -2319,8 +2320,9 @@ class CallbackWithArgs(Callback):
         kwargsFinal = self.kwargs.copy()
         kwargsFinal.update(kwargs)
         cmds.undoInfo(openChunk=1)
-        return self.func(*self.args + args, **kwargsFinal)
+        result = self.func(*self.args + args, **kwargsFinal)
         cmds.undoInfo(closeChunk=1)
+        return result
 
 _LastCommand = None
 def button(*args, **kwargs):
