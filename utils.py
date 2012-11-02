@@ -600,6 +600,12 @@ class ItemList(object):
     def __init__(self, items=None, format='{name}', encode=None, **kwargs):
         self._format = format
         self._customEncode = encode
+        self.dragCallback = None
+        self.dropCallback = None
+        self.deleteCallback = None
+        kwargs['dgc'] = self._dragCallback
+        kwargs['dpc'] = self._dropCallback
+        kwargs['dkc'] = self._deleteCallback
         self.build(**kwargs)
         self.items = items
 
@@ -665,12 +671,6 @@ class ItemList(object):
         self.update()
 
     def build(self, **kwargs):
-        # Drag and Drop
-        if 'dgc' not in kwargs.keys() or 'dragCallback' not in kwargs.keys():
-            kwargs['dgc'] = self.dragCallback
-        if 'dpc' not in kwargs.keys() or 'dropCallback' not in kwargs.keys():
-            kwargs['dpc'] = self.dropCallback
-
         self.control = pm.textScrollList(**kwargs)
 
     def _encode(self, item):
@@ -690,13 +690,26 @@ class ItemList(object):
             n = self.format.format(index=i+1, name=n)
             self.control.append(n)
 
-    def dragCallback(self, dragCtrlName, x, y, modifiers):
+    def _dragCallback(self, dragCtrlName, x, y, modifiers):
         s = self.selected
-        return s
+        if self.dragCallback is not None and hasattr(self.dragCallback, '__call__'):
+            return self.dragCallback(s)
+        else:
+            return s
 
-    def dropCallback(self, dragCtrlName, dropCtrlName, messages, x, y, dragType):
+    def _dropCallback(self, dragCtrlName, dropCtrlName, messages, x, y, dragType):
         for m in messages:
             self.append(m)
+        if self.dropCallback is not None and hasattr(self.dropCallback, '__call__'):
+            self.dropCallback(messages)
+
+    def _deleteCallback(self):
+        sel = self.selected
+        for i in sel:
+            self._items.remove(i)
+        if self.deleteCallback is not None and hasattr(self.deleteCallback, '__call__'):
+            self.deleteCallback(sel) # Passes deleted items
+        self.update()
 
 class FilterList(ItemList):
     """
@@ -884,13 +897,19 @@ class NodeList(ItemList):
         if hasattr(self.selectCommand, '__call__'):
             self.selectCommand(nodes)
 
-    def dragCallback(self, dragCtrlName, x, y, modifiers):
+    def _dragCallback(self, dragCtrlName, x, y, modifiers):
         s = self.selected
-        return [n.longName() for n in s]
+        if self.dragCallback is not None and hasattr(self.dragCallback, '__call__'):
+            return self.dragCallback(s)
+        else:
+            return [n.longName() for n in s]
 
-    def dropCallback(self, dragCtrlName, dropCtrlName, messages, x, y, dragType):
+    def _dropCallback(self, dragCtrlName, dropCtrlName, messages, x, y, dragType):
         for m in messages:
             self.append(pm.PyNode(m))
+        if self.dropCallback is not None and hasattr(self.dropCallback, '__call__'):
+            self.dropCallback(messages)
+
 
 class DataLayout(object):
     """
@@ -2285,7 +2304,7 @@ class Callback(object):
 
     def __call__(self,*args):
         cmds.undoInfo(openChunk=1)
-        self.func(*self.args, **self.kwargs)
+        return self.func(*self.args, **self.kwargs)
         cmds.undoInfo(closeChunk=1)
 
     def __str__(self):
@@ -2300,7 +2319,7 @@ class CallbackWithArgs(Callback):
         kwargsFinal = self.kwargs.copy()
         kwargsFinal.update(kwargs)
         cmds.undoInfo(openChunk=1)
-        self.func(*self.args + args, **kwargsFinal)
+        return self.func(*self.args + args, **kwargsFinal)
         cmds.undoInfo(closeChunk=1)
 
 _LastCommand = None
