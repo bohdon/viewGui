@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import inspect
 
 LOG = logging.getLogger(__name__)
 
@@ -142,8 +143,12 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidth
         child1.setHeight(h)
     if autoWidths:
         # handle single number fields
+        print "attr: %s" % attr # TESTING
+        print "attr.type(): %s" % attr.type() # TESTING
         if attr.type() in ('long', 'int', 'double', 'float'):
             row.columnWidth((2, cw / 3.0))
+        if attr.type() in ('string'):
+            row.columnWidth((2, cw/1.05))
         # handle sliders with nav button
         if count == 4 and isinstance(children[2], pm.ui.FloatSlider):
             row.columnWidth((3, cw / 3.0 * 2))
@@ -176,13 +181,13 @@ def unknownAttrControl(attr, lw=100, cw=200, ls=4, al='right', labelfnc=None, wr
 class CompoundAttrLayout(object):
     compoundTypes = ['float2', 'float3', 'double2', 'double3', 'long2', 'long3', 'short2', 'short3']
 
-    def __init__(self, attr, autoKwargs={}, w=300, labelfnc=None, **kwargs):
+    def __init__(self, attr, autoKwargs={}, labelfnc=None, **kwargs):
         if not attr.isCompound():
             raise ValueError('{0} is not a compound attribute'.format(attr))
         self.attr = attr
         self.autoKwargs = autoKwargs
         self.labelfnc = labelfnc
-        self.build(w=w, **kwargs)
+        self.build(**kwargs)
 
     def __str__(self):
         return str(self.layout)
@@ -193,10 +198,10 @@ class CompoundAttrLayout(object):
             return self.labelfnc(self.attr)
         return getAttrTitle(self.attr)
 
-    def build(self, w=300, **kwargs):
-        kw = dict(l=self.label, bs='etchedIn', mw=4, mh=4, w=w)
+    def build(self, **kwargs):
+        kw = dict(l=self.label, bs='etchedIn', mw=4, mh=4)
         kw.update(kwargs)
-        with pm.frameLayout(**kw) as self.layout:
+        with FrameLayout(**kw) as self.layout:
             self.buildContent()
 
     def buildContent(self):
@@ -243,13 +248,13 @@ def removeMultiItem(attr, index):
 
 
 class MultiAttrLayout(object):
-    def __init__(self, attr, autoKwargs={}, w=300, labelfnc=None, **kwargs):
+    def __init__(self, attr, autoKwargs={}, labelfnc=None, **kwargs):
         if not attr.isMulti():
             raise ValueError('{0} is not a multi attribute'.format(attr))
         self.attr = attr
         self.autoKwargs = autoKwargs
         self.labelfnc = labelfnc
-        self.build(w=w, **kwargs)
+        self.build(**kwargs)
 
     def __str__(self):
         return str(self.layout)
@@ -262,8 +267,8 @@ class MultiAttrLayout(object):
         l = '{0} ({1})'.format(l, self.attr.numElements())
         return l
 
-    def build(self, w=300, **kwargs):
-        kw = dict(l=self.label, bs='etchedIn', mw=4, mh=4, w=w)
+    def build(self, **kwargs):
+        kw = dict(l=self.label, bs='etchedIn', mw=4, mh=4)
         kw.update(kwargs)
         with pm.frameLayout(**kw) as self.layout:
             self.buildContent()
@@ -274,11 +279,14 @@ class MultiAttrLayout(object):
             for i in self.attr.getArrayIndices():
                 self.buildItem(i)
 
+    def buildToolBtns(self, index, form):
+        pm.iconTextButton(i='removeRenderable.png', st='iconOnly', c=Callback(self.removeItem, index, form))
+
     def buildItem(self, index):
         with pm.formLayout() as form:
+            self.autoKwargs['compoundKwargs']['btns'] = Callback(self.buildToolBtns, index, form)
             autoAttrControl(self.attr[index], **self.autoKwargs)
-            pm.iconTextButton(i='removeRenderable.png', st='iconOnly', c=Callback(self.removeItem, index, form))
-            layoutForm(form, (1, 0))
+            layoutForm(form, 1)
 
     def update(self):
         self.layout.clear()
@@ -587,6 +595,182 @@ class GridFormLayout(object):
             attaches.append((element, 'bottom', self.spacing, 100 * (j + 1) / nr))
         pm.formLayout(self.form, e=True, ap=attaches)
 
+def packagesDir():
+    return os.path.dirname(inspect.getfile(inspect.currentframe()))
+
+def imagesDir():
+    return os.path.join(packagesDir(), 'icons')
+
+def getImage(path):
+    return os.path.join(imagesDir(), path)
+
+class FrameLayout(object):
+    '''
+    Frame layout with the addition of space for buttons on the right
+    '''
+    def __init__(self, btns=None, **kwargs):
+        self.btns = btns
+
+        # Load Collapse Settings
+        self._preCollapseCommand = None
+        self._preExpandCommand = None
+        self._collapseCommand = None
+        self._expandCommand = None
+        self._collapsable = False
+        self._collapsed = False
+        if 'cll' in kwargs.keys() and kwargs['cll']:
+            self._collapsable = True
+            if 'pcc' in kwargs.keys():
+                self.preCollapseCommand(kwargs['pcc'])
+            if 'pec' in kwargs.keys():
+                self.preExpandCommand(kwargs['pec'])
+            if 'cc' in kwargs.keys():
+                self.collapseCommand(kwargs['cc'])
+            if 'ec' in kwargs.keys():
+                self.expandCommand(kwargs['ec'])
+            if 'cl' in kwargs.keys() and kwargs['cl']:
+                self._collapsed = True
+            self.collapseIcon = getImage("frameLayout_collapse.png")
+            self.expandIcon = getImage("frameLayout_expand.png")
+        self.build(**kwargs)
+
+    def __str__(self):
+        return str(self.body)
+
+    def __enter__(self):
+        self.body.__enter__()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.body.__exit__(type, value, traceback)
+
+    def collapseCommand(self, value):
+        if hasattr(value, '__call__'):
+            self._collapseCommand = value
+
+    def expandCommand(self, value):
+        if hasattr(value, '__call__'):
+            self._expandCommand = value
+
+    def preCollapseCommand(self, value):
+        if hasattr(value, '__call__'):
+            self._preCollapseCommand = value
+
+    def expandCommand(self, value):
+        if hasattr(value, '__call__'):
+            self._preExpandCommand = value
+
+    def getCollapsable(self):
+        return self._collapsed
+
+    def setCollapsable(self, value):
+        self._collapsable = bool(value)
+        if self._collapsed:
+            self.expand()   
+
+    def getCollapse(self, value):
+        return self._collapsed
+
+    def setCollapse(self, value, skipCallbacks=False):
+        if self._collapsable:
+            if value:
+                self.expand(skipCallbacks)
+            else:
+                self.collapse(skipCallbacks)
+
+    def getEnable(self, value):
+        return self.layout.getEnable()
+
+    def setEnable(self, value):
+        self.layout.setEnable(value)
+
+    def getManage(self):
+        return self.layout.getManage()
+
+    def setManage(self, value):
+        self.layout.setManage(value)
+
+    def toggleCollapse(self):
+        if self._collapsable:
+            if self._collapsed:
+                self.expand()
+            else:
+                self.collapse()
+
+    def expand(self, skipCallbacks=False):
+        if self._collapsable:
+            if not skipCallbacks and self._preExpandCommand:
+                self._preExpandCommand()
+            self.body.setManage(True)
+            self.collapseBtn.setImage(self.expandIcon)
+            self._collapsed = False
+            if not skipCallbacks and self._expandCommand:
+                self._expandCommand()
+
+    def collapse(self, skipCallbacks=False):
+        if self._collapsable:
+            if not skipCallbacks and self._preCollapseCommand:
+                self._preCollapseCommand()
+            self.body.setManage(False)
+            self.collapseBtn.setImage(self.collapseIcon)
+            self._collapsed = True
+            if not skipCallbacks and self._collapseCommand:
+                self._collapseCommand()
+
+    def getLabelVisible(self):
+        return self.headerFrame.getManage()
+
+    def setLabelVisible(self, value):
+        if value:
+            self.headerFrame.setManage(True)
+        else:
+            self.headerFrame.setManage(False)
+
+    def build(self, **kwargs):
+        # Parse the kwargs
+        allKwargs = dict([k for k in kwargs.items() if k[0] in ('ann')])
+        frameKwargs = dict([k for k in kwargs.items() if k[0] in ('bv','bs','h','w')])
+        frameKwargs.update(allKwargs)
+        headerKwargs = dict(bgc=[.3]*3) # Set Defaults
+        headerKwargs.update(dict([k for k in kwargs.items() if k[0] in ('bgc')]))
+        headerFrameKwargs = dict(frameKwargs.items())
+        headerFrameKwargs.update(dict(bs='etchedOut')) # Make sure the top is etched out
+        frameKwargs.update(allKwargs)
+        columnKwargs = dict([k for k in kwargs.items() if k[0] in ('en','vis','vcc','po','p','m','io')])
+        columnKwargs.update(allKwargs)
+        labelKwargs = dict([k for k in kwargs.items() if k[0] in ('lw', 'fn')])
+        labelKwargs.update(allKwargs)
+
+        with pm.columnLayout(adj=True, **columnKwargs) as self.layout:
+            if kwargs.has_key('lv') and not kwargs['lv']:
+                pass
+            else:
+                with pm.frameLayout(lv=False, **headerFrameKwargs) as self.headerLayout:
+                    with pm.formLayout(**headerKwargs) as self.headerForm:
+                        li = kwargs['li'] if kwargs.has_key('li') else 2
+                        la = kwargs['la'] if kwargs.has_key('la') else 'left'
+                        if not kwargs.has_key('lv') or not kwargs['lv']:
+                            label = kwargs['l'] if kwargs.has_key('l') else ""
+                        else:
+                            label = ""
+
+                        pm.separator(st="none", w=li)
+                        if self._collapsable:
+                            img = self.collapseIcon if self._collapsed else self.expandIcon
+                            self.collapseBtn = pm.iconTextButton(i=img, st='iconAndTextHorizontal', l=label, align=la, c=Callback(self.toggleCollapse), **labelKwargs)
+                        else:
+                            pm.text(l=label, align=la, h=18, **labelKwargs)
+                        pm.separator(st="none", w=li)
+
+                        with pm.columnLayout(adj=True):
+                            if self.btns and hasattr(self.btns, '__call__'):
+                                self.btns()
+
+                        layoutForm(self.headerForm, (0,1,0,0))
+                if kwargs.has_key('lv'):
+                    self.setLabelVisible(kwargs['lv'])
+            self.body = pm.frameLayout(lv=False, **frameKwargs)
+            self.body.setManage(not self._collapsed)
 
 
 class ItemList(object):
@@ -2315,8 +2499,6 @@ class Callback(object):
 
 class CallbackWithArgs(Callback):
     def __call__(self,*args,**kwargs):
-        # not sure when kwargs would get passed to __call__,
-        # but best not to remove support now
         kwargsFinal = self.kwargs.copy()
         kwargsFinal.update(kwargs)
         cmds.undoInfo(openChunk=1)
