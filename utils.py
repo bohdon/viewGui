@@ -143,8 +143,6 @@ def attrControl(attr, cw=200, lw=100, ls=4, al='right', labelfnc=None, autoWidth
         child1.setHeight(h)
     if autoWidths:
         # handle single number fields
-        print "attr: %s" % attr # TESTING
-        print "attr.type(): %s" % attr.type() # TESTING
         if attr.type() in ('long', 'int', 'double', 'float'):
             row.columnWidth((2, cw / 3.0))
         if attr.type() in ('string'):
