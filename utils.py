@@ -654,7 +654,7 @@ class FrameLayout(object):
         if hasattr(value, '__call__'):
             self._preCollapseCommand = value
 
-    def expandCommand(self, value):
+    def preExpandCommand(self, value):
         if hasattr(value, '__call__'):
             self._preExpandCommand = value
 
@@ -726,18 +726,13 @@ class FrameLayout(object):
 
     def build(self, **kwargs):
         # Parse the kwargs
-        allKwargs = dict([k for k in kwargs.items() if k[0] in ('ann')])
-        frameKwargs = dict([k for k in kwargs.items() if k[0] in ('bv','bs','h','w')])
-        frameKwargs.update(allKwargs)
+        frameKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','bv','bs','h','w')])
         headerKwargs = dict(bgc=[.3]*3) # Set Defaults
-        headerKwargs.update(dict([k for k in kwargs.items() if k[0] in ('bgc')]))
+        headerKwargs.update(dict([k for k in kwargs.items() if k[0] in ('ann','bgc')]))
         headerFrameKwargs = dict(frameKwargs.items())
-        headerFrameKwargs.update(dict(bs='etchedOut')) # Make sure the top is etched out
-        frameKwargs.update(allKwargs)
-        columnKwargs = dict([k for k in kwargs.items() if k[0] in ('en','vis','vcc','po','p','m','io')])
-        columnKwargs.update(allKwargs)
-        labelKwargs = dict([k for k in kwargs.items() if k[0] in ('lw', 'fn')])
-        labelKwargs.update(allKwargs)
+        headerFrameKwargs['bs'] = 'etchedOut' # Make sure the top is etched out
+        columnKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','en','vis','vcc','po','p','m','io')])
+        labelKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','lw', 'fn')])
 
         with pm.columnLayout(adj=True, **columnKwargs) as self.layout:
             if kwargs.has_key('lv') and not kwargs['lv']:
