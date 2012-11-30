@@ -726,11 +726,10 @@ class FrameLayout(object):
 
     def build(self, **kwargs):
         # Parse the kwargs
-        frameKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','bv','bs','h','w')])
         headerKwargs = dict(bgc=[.3]*3) # Set Defaults
         headerKwargs.update(dict([k for k in kwargs.items() if k[0] in ('ann','bgc')]))
-        headerFrameKwargs = dict(frameKwargs.items())
-        headerFrameKwargs['bs'] = 'etchedOut' # Make sure the top is etched out
+        headerFrameKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','bv','h','w')] + [('bs', 'etchedOut')])
+        bodyFrameKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','bv','bs','h','w', 'mw', 'mh')])
         columnKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','en','vis','vcc','po','p','m','io')])
         labelKwargs = dict([k for k in kwargs.items() if k[0] in ('ann','lw', 'fn')])
 
@@ -762,7 +761,7 @@ class FrameLayout(object):
                         layoutForm(self.headerForm, (0,1,0,0))
                 if kwargs.has_key('lv'):
                     self.setLabelVisible(kwargs['lv'])
-            self.body = pm.frameLayout(lv=False, **frameKwargs)
+            self.body = pm.frameLayout(lv=False, **bodyFrameKwargs)
             self.body.setManage(not self._collapsed)
 
 
