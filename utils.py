@@ -2499,11 +2499,11 @@ class CallbackWithArgs(Callback):
         return result
 
 _LastCommand = None
-def button(*args, **kwargs):
+def _makeCommandRepeatable(func, flags, *args, **kwargs):
     '''
-    Add commandRepeatable to standard button
+    Add commandRepeatable to pm controls
     '''
-    def makeCommandRepeatable(c, *args, **kwargs):
+    def makeRepeatable(c, *args, **kwargs):
         global _LastCommand
         c(*args, **kwargs)
         _LastCommand = Callback(c, *args, **kwargs)
@@ -2511,6 +2511,16 @@ def button(*args, **kwargs):
 
     if 'rpt' in kwargs:
         rpt = kwargs.pop('rpt')
-        if 'c' in kwargs:
-            kwargs['c'] = CallbackWithArgs(makeCommandRepeatable, kwargs['c'])
-    return pm.button(*args, **kwargs)
+        for flag in asList(flags):
+            if flag in kwargs:
+                kwargs[flag] = CallbackWithArgs(makeRepeatable, kwargs[flag])
+    return func(*args, **kwargs)
+
+def button(*args, **kwargs):
+    return _makeCommandRepeatable(pm.button, 'c', *args, **kwargs)
+
+def iconTextButton(*args, **kwargs):
+    return _makeCommandRepeatable(pm.iconTextButton, 'c', *args, **kwargs)
+
+def iconTextCheckBox(*args, **kwargs):
+    return _makeCommandRepeatable(pm.iconTextCheckBox, ['onc','ofc'], *args, **kwargs)    
