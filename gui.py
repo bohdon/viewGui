@@ -34,7 +34,7 @@ class Gui(object):
     The window has metrics, but Views may also have metrics that will be applied when
     the View is shown.  The gui can ignore View metrics by setting ignoreViewMetrics to True.
     """
-    def __init__(self, title='View Gui', name='viewGuiWin', viewClasses=None, defaultView=None, w=None, h=None):
+    def __init__(self, title='View Gui', name='viewGuiWin', viewClasses=None, defaultView=None, w=None, h=None, toolbox=False):
         """
         `title` -- the title for the window
         `name` -- the maya name for the window, should be as unique as possible
@@ -45,6 +45,7 @@ class Gui(object):
         """
         self.title = title
         self.name = name
+        self.toolbox = toolbox
         self.metrics = {'w':w, 'h':h, 'tlc':None}
         
         self._win = None
@@ -164,7 +165,7 @@ class Gui(object):
         
         self._win = None
         self.applyMetrics()
-        with pm.window(self.winName, title=self.title) as self._win:
+        with pm.window(self.winName, title=self.title, toolbox=self.toolbox) as self._win:
             self.mainControl = self._win
             with pm.frameLayout('mainForm', lv=False, bv=False) as self._mainLayout:
                 self.showDefaultView()
