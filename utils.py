@@ -666,7 +666,7 @@ class FrameLayout(object):
         if self._collapsed:
             self.expand()   
 
-    def getCollapse(self, value):
+    def getCollapse(self):
         return self._collapsed
 
     def setCollapse(self, value, skipCallbacks=False):

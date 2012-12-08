@@ -355,13 +355,14 @@ class DockControl(Gui):
         self._win = pm.window(self.winName, title=self.title)
         with pm.frameLayout('mainForm', lv=False, bv=False, p=self._win) as self._mainLayout:
             self.mainControl = self._mainLayout
-            self.showDefaultView()
 
             # Create the dockControl
             self._dockControl = pm.dockControl(self.winName+"Dock",
                 con=self._win, aa=['left', 'right'], a=self.area, fl=int(self.floating), l=self.title,
                 vcc=Callback(self.dockVisibleChanged), vis=False,
             )
+
+            self.showDefaultView()
 
         pm.scriptJob(uid=(self._win, Callback(self.winClosed)))
 
