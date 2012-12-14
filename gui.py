@@ -335,6 +335,10 @@ class DockControl(Gui):
             else:
                 self._updateViews()
 
+    def applyMetrics(self, m=None):
+        ''' Don't need it for the Dock '''
+        pass
+
     def register(self):
         """ Register the dock in maya """
         self.deleteViews()
@@ -361,7 +365,7 @@ class DockControl(Gui):
                 con=self._win, aa=['left', 'right'], a=self.area, fl=int(self.floating), l=self.title,
                 vcc=Callback(self.dockVisibleChanged), vis=False,
             )
-
+            self._win = self._mainLayout
             self.showDefaultView()
 
         pm.scriptJob(uid=(self._win, Callback(self.winClosed)))
