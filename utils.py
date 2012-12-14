@@ -779,10 +779,15 @@ class ItemList(object):
         self.dragCallback = None
         self.dropCallback = None
         self.deleteCallback = None
+        self._searchFilter = None
+        if kwargs.has_key('searchFilter'):
+            self._searchFilter = kwargs['searchFilter']
+            del kwargs['searchFilter']
         kwargs['dgc'] = self._dragCallback
         kwargs['dpc'] = self._dropCallback
         kwargs['dkc'] = self._deleteCallback
         self.build(**kwargs)
+        self._allItems = items
         self.items = items
 
     def __str__(self):
@@ -794,7 +799,7 @@ class ItemList(object):
     @items.setter
     def items(self, value):
         value = asList(value)
-        self._items = value
+        self._allItems = value
         self.update()
 
     @property
@@ -842,6 +847,17 @@ class ItemList(object):
         self.control.deselectAll()
         self.control.setSelectIndexedItem(indeces)
 
+    @property
+    def searchFilter(self):
+        return self._searchFilter
+    @searchFilter.setter
+    def searchFilter(self, value):
+        if value is not None:
+            self._searchFilter = str(value)
+        else:
+            self._searchFilter = None
+        self.update()
+
     def append(self, item):
         self._items.append(item)
         self.update()
@@ -857,14 +873,34 @@ class ItemList(object):
             return ''
         return str(val)
 
+    def _getFilteredItems(self):
+        ''' Filter the supplied items based on the searchFilter '''
+        if self._allItems is not None:
+            items = [(i,self._encode(i)) for i in self._allItems]
+            if self._searchFilter is not None:
+                results = []
+                for i,name in items:
+                    searches = re.split('[; |,]',self._searchFilter)
+                    found = False
+                    for search in searches:
+                        if search in name:
+                            found = True
+                    if found: results.append((i,name))
+                results.sort(key=lambda w:w[0])
+            else:
+                results = items
+            self._items = [i[0] for i in results]
+            return [i[1] for i in results]
+
     def update(self):
         """ Update the list to represent the current items """
-        names = [self._encode(i) for i in self.items]
-        self.control.removeAll()
-        for i, n in enumerate(names):
-            # format encoded name
-            n = self.format.format(index=i+1, name=n)
-            self.control.append(n)
+        names = self._getFilteredItems()
+        if names:
+            self.control.removeAll()
+            for i, n in enumerate(names):
+                # format encoded name
+                n = self.format.format(index=i+1, name=n)
+                self.control.append(n)
 
     def _dragCallback(self, dragCtrlName, x, y, modifiers):
         s = self.selected
@@ -896,10 +932,6 @@ class FilterList(ItemList):
     """
     def __init__(self, parent=None, child=None, items={}, *args, **kwargs):
         self.allItems = items
-        self._searchFilter = None
-        if kwargs.has_key('searchFilter'):
-            self._searchFilter = kwargs['searchFilter']
-            del kwargs['searchFilter']
         items = None
         self.parent = parent
         self.child = child
@@ -910,23 +942,20 @@ class FilterList(ItemList):
         kwargs['doubleClickCommand'] = Callback(self._doubleClickCommand)
         super(FilterList, self).__init__(*args, **kwargs)
 
-    @property
-    def searchFilter(self):
-        return self._searchFilter
-    @searchFilter.setter
-    def searchFilter(self, value):
-        self._searchFilter = value
-        self.update()
-
     def update(self):
         # maintain the current selection
         sel = self.selectedNames
         self._items = self._getFilteredItems()
-        super(FilterList, self).update()
+        names = [self._encode(i) for i in self.items]
+        self.control.removeAll()
+        for i, n in enumerate(names):
+            # format encoded name
+            n = self.format.format(index=i+1, name=n)
+            self.control.append(n)
         if isinstance(self.child, FilterList):
             self.child.update()
         # Reapply the selection
-        # self.selectedNames(sel) #TODO
+        self.selectedNames = sel
 
     def _filterDict(self, dictionary, keys=None):
         '''
@@ -1056,7 +1085,7 @@ class NodeList(ItemList):
     @items.setter
     def items(self, value):
         value = asList(value)
-        self._items = value
+        self._allItems = value
         self.update()
 
     def onDoubleClick(self):
