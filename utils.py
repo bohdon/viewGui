@@ -823,7 +823,9 @@ class ItemList(object):
     def selected(self):
         sel = self.selectedIndeces
         if sel and len(sel):
-            return [self.items[i] for i in self.selectedIndeces]
+            print "sel: {0}".format(sel) # TESTING
+            print "self.items: {0}".format(self.items) # TESTING
+            return [self.items[i] for i in sel]
     @selected.setter
     def selected(self, value):
         value = asList(value)
@@ -832,7 +834,9 @@ class ItemList(object):
 
     @property
     def selectedNames(self):
-        return [self._encode(i) for i in self.selected]
+        sel = self.selected
+        if sel:
+            return [self._encode(i) for i in self.selected]
     @selectedNames.setter
     def selectedNames(self, value):
         value = asList(value)
