@@ -821,7 +821,9 @@ class ItemList(object):
 
     @property
     def selected(self):
-        return [self.items[i] for i in self.selectedIndeces]
+        sel = self.selectedIndeces
+        if sel and len(sel):
+            return [self.items[i] for i in self.selectedIndeces]
     @selected.setter
     def selected(self, value):
         value = asList(value)
