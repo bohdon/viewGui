@@ -823,8 +823,6 @@ class ItemList(object):
     def selected(self):
         sel = self.selectedIndeces
         if sel and len(sel):
-            print "sel: {0}".format(sel) # TESTING
-            print "self.items: {0}".format(self.items) # TESTING
             return [self.items[i] for i in sel]
     @selected.setter
     def selected(self, value):
