@@ -1090,6 +1090,7 @@ class NodeList(ItemList):
         super(NodeList, self).__init__(*args, **kwargs)
         self.doubleClick = False
         self.selectCommand = None
+        self.doubleClickCommand = None
 
     @property
     def items(self):
@@ -1103,6 +1104,8 @@ class NodeList(ItemList):
     def onDoubleClick(self):
         if self.doubleClick:
             self.selectNodes()
+        if hasattr(self.doubleClickCommand, '__call__'):
+            self.doubleClickCommand(self.selected)
     
     def onSelect(self):
         if not self.doubleClick:
