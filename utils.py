@@ -824,6 +824,7 @@ class ItemList(object):
         sel = self.selectedIndeces
         if sel and len(sel):
             return [self.items[i] for i in sel]
+        return []
     @selected.setter
     def selected(self, value):
         value = asList(value)
@@ -879,28 +880,29 @@ class ItemList(object):
 
     def _getFilteredItems(self):
         ''' Filter the supplied items based on the searchFilter '''
-        if self._allItems is not None:
-            items = [(i,self._encode(i)) for i in self._allItems]
-            if self._searchFilter is not None:
-                results = []
-                for i,name in items:
-                    searches = re.split('[; |,]',self._searchFilter)
-                    found = False
-                    for search in searches:
-                        if search in name:
-                            found = True
-                    if found: results.append((i,name))
-                results.sort(key=lambda w:w[0])
-            else:
-                results = items
-            self._items = [i[0] for i in results]
-            return [i[1] for i in results]
+        if self._allItems is None:
+            return []
+        items = [(i,self._encode(i)) for i in self._allItems]
+        if self._searchFilter is not None:
+            results = []
+            for i,name in items:
+                searches = re.split('[; |,]',self._searchFilter)
+                found = False
+                for search in searches:
+                    if search in name:
+                        found = True
+                if found: results.append((i,name))
+            results.sort(key=lambda w:w[0])
+        else:
+            results = items
+        self._items = [i[0] for i in results]
+        return [i[1] for i in results]
 
     def update(self):
         """ Update the list to represent the current items """
         names = self._getFilteredItems()
+        self.control.removeAll()
         if names:
-            self.control.removeAll()
             for i, n in enumerate(names):
                 # format encoded name
                 n = self.format.format(index=i+1, name=n)
@@ -1032,7 +1034,8 @@ class FilterList(ItemList):
 
 
 class ManageableList(ItemList):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, vertical=False, *args, **kwargs):
+        self.vertical = vertical
         super(ManageableList, self).__init__(*args, **kwargs)
         self.addCommand = None
         self.removeCommand = None
@@ -1048,11 +1051,16 @@ class ManageableList(ItemList):
             add = pm.button(l='+', w=20, h=20, ann='Add', c=Callback(self.onAdd))
             rem = pm.button(l='-', w=20, h=20, ann='Remove', c=Callback(self.onRemove))
             clr = pm.button(l='x', w=20, h=20, ann='Clear', c=Callback(self.onClear))
-            pm.formLayout(form, e=True,
-                af=[(lst, 'left', 0), (lst, 'top', 0), (lst, 'bottom', 0), (clr, 'right', 0),
-                    (add, 'bottom', 0), (rem, 'bottom', 0), (clr, 'bottom', 0)],
-                ac=[(rem, 'right', 4, clr), (add, 'right', 4, rem), (lst, 'right', 4, add)],
-            )
+            if self.vertical:
+                layoutFormChildren(form, (str(lst)), 1)
+                layoutFormChildren(form, (str(add), str(rem), str(clr)), (1, 1, 1), fullAttach=False)
+                attachFormChildren(form, (str(add), str(rem), str(clr)), "bottom", offset=0)
+                attachFormChildren(form, (str(lst)), "bottom", offset=4, ctl=str(add))
+            else:
+                # horizontal layout
+                layoutForm(form, (1, 0, 0, 0), fullAttach=False)
+                attachFormChildren(form, str(lst), ("top", "bottom"), offset=0)
+                attachFormChildren(form, (str(add), str(rem), str(clr)), "bottom", offset=0)
         self.layout = form
 
     def setHeight(self, value):
@@ -1101,6 +1109,8 @@ class NodeList(ItemList):
             self.selectNodes()
 
     def selectNodes(self):
+        if self.selected is None:
+            return
         nodes = [n for n in self.selected if hasattr(n, 'select') or isinstance(n, pm.Attribute)]
         pm.select(nodes)
         if hasattr(self.selectCommand, '__call__'):
