@@ -22,7 +22,11 @@ __all__ = [
     'ScriptedPanel',
 ]
 
-LOG = logging.getLogger(__name__)
+try:
+    LOG = logging.getMbotLogger(__name__)
+except:
+    LOG = logging.getLogger(__name__)
+
 VERSION = '0.0'
 DEFAULT_SIZE = (200, 200)
 DEFAULT_TLC = (200, 200)

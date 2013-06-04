@@ -19,7 +19,11 @@ import sys
 import textwrap
 import inspect
 
-LOG = logging.getLogger(__name__)
+try:
+    LOG = logging.getMbotLogger(__name__)
+except:
+    LOG = logging.getLogger(__name__)
+
 
 SHOW_MSG = 'Show in ' + ('Finder' if sys.platform == 'darwin' else 'Explorer')
 

@@ -28,7 +28,6 @@ to all viewGui.View subclasses.
 >>> gui.create()
 """
 
-import logging
 import os
 import gui
 import utils
@@ -39,7 +38,3 @@ from view import *
 
 __version__ = '0.5.5'
 gui.VERSION = __version__
-
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.INFO)
-
