@@ -1414,6 +1414,84 @@ class ModeForm(object):
             self.modeChangedCommand(mode)
 
 
+class ItemListWindow(object):
+    """
+    A window containing a single item list.
+    """
+    def __init__(self, title=None, description=None, items=[], winName=None, **kwargs):
+        self.title = title
+        self.description = description
+        self.winName = winName
+        self.window = None
+        self.listKwargs = kwargs
+        self.build()
+        self.items = items
+
+    @property
+    def items(self):
+        return self.itemList.items
+    @items.setter
+    def items(self, value):
+        self.itemList.items = value
+
+    def build(self):
+        self.close()
+        args = []
+        kw = {'toolbox':True}
+        if self.title is not None:
+            kw['title'] = self.title
+        if self.winName is not None:
+            args = [self.winName]
+        with pm.window(*args, **kw) as self.window:
+            ratios = []
+            with pm.formLayout() as f:
+                # build optional description
+                if self.buildDescription():
+                    ratios.append(0)
+                # build item list
+                self.buildItemList()
+                ratios.append(1)
+                # build optional button form
+                if self.buildButtonForm():
+                    ratios.append(0)
+                # layout the form
+                layoutForm(f, ratios, spacing=4, vertical=True, offset=4)
+
+    def close(self):
+        if self.window:
+            winName = str(self.window)
+        else:
+            winName = self.winName
+        if winName and pm.window(winName, q=True, ex=True):
+            pm.deleteUI(winName, window=True)
+
+    def buildDescription(self):
+        if self.description:
+            return pm.text(l=self.description)
+
+    def buildItemList(self):
+        """
+        Build the item list for this window.
+        Override to implement custom item list types
+        """
+        self.itemList = ItemList(**self.listKwargs)
+
+    def buildButtonForm(self):
+        """
+        Override to build a custom button form layout.
+        Must return a single layout object, eg. a form or column layout
+        """
+        pass
+
+
+class NodeListWindow(ItemListWindow):
+    """
+    A window containing a single node list
+    """
+    def buildItemList(self):
+        self.itemList = NodeList(**self.listKwargs)
+
+
 
 class BrowsePathForm(object):
     """
