@@ -491,7 +491,7 @@ class ScriptedPanelTypes(object):
         # create new panel type if it doesnt exist
         if not pm.scriptedPanelType(typeName, query=True, exists=True):
             newType = pm.scriptedPanelType(typeName)
-            LOG.info('created new scripted panel type: {0}'.format(newType))
+            LOG.debug('Created new scripted panel type: {0}'.format(newType))
         # edit panel type
         kw = {}
         for cb in ('create', 'init', 'add', 'remove', 'delete', 'saveState', 'copyState'):
