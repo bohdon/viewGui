@@ -13,6 +13,8 @@ import view
 import time
 from utils import Callback
 
+import mbotenv
+
 __all__ = [
     'Gui',
     'ViewGui',
@@ -22,10 +24,7 @@ __all__ = [
     'ScriptedPanel',
 ]
 
-try:
-    LOG = logging.getMbotLogger(__name__)
-except:
-    LOG = logging.getLogger(__name__)
+LOG = mbotenv.get_logger(__name__)
 
 VERSION = '0.0'
 DEFAULT_SIZE = (200, 200)
