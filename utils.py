@@ -2606,8 +2606,10 @@ class Callback(object):
 
     def __call__(self,*args):
         cmds.undoInfo(openChunk=1)
-        result = self.func(*self.args, **self.kwargs)
-        cmds.undoInfo(closeChunk=1)
+        try:
+            result = self.func(*self.args, **self.kwargs)
+        finally:
+            cmds.undoInfo(closeChunk=1)
         return result
 
     def __str__(self):
